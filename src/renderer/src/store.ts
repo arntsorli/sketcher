@@ -4,6 +4,7 @@ import {
   calculateStair,
   createWall,
   distance,
+  validateNextPolygonPoint,
   validatePolygon,
 } from "../../shared/geometry";
 import type { ProjectArchive, ProjectCard } from "../../shared/ipc";
@@ -85,6 +86,7 @@ interface EditorState {
   undo(): void;
   redo(): void;
   addFoundationPoint(point: Vec2): void;
+  removeLastFoundationPoint(): void;
   finishFoundation(): void;
   addWallSegment(start: Vec2, end: Vec2): void;
   addOpening(kind: "door" | "window", point: Vec2): void;
@@ -351,8 +353,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   addFoundationPoint(point) {
     const state = get();
     const first = state.draft.points[0];
-    if (first && state.draft.points.length >= 3 && distance(first, point) <= 250) {
+    if (first && state.draft.points.length >= 3 && distance(first, point) < 1) {
       get().finishFoundation();
+      return;
+    }
+    const error = validateNextPolygonPoint(state.draft.points, point);
+    if (error) {
+      set({ error, status: "Foundation point rejected" });
       return;
     }
     set({
@@ -362,6 +369,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         hover: undefined,
         numericInput: "",
       },
+    });
+  },
+
+  removeLastFoundationPoint() {
+    const state = get();
+    if (state.draft.points.length === 0) return;
+    set({
+      draft: {
+        ...state.draft,
+        points: state.draft.points.slice(0, -1),
+        hover: undefined,
+        numericInput: "",
+      },
+      status: "Last foundation point removed",
+      error: undefined,
     });
   },
 

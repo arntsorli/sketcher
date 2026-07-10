@@ -77,7 +77,9 @@ try {
   await window.getByText("2 points").waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "builder.png") });
 
-  await window.keyboard.press("Escape");
+  await window.getByRole("button", { name: "Undo last point" }).click();
+  await window.getByRole("button", { name: "Undo last point" }).click();
+  await window.getByText("0 points").waitFor({ state: "visible" });
   const points = [
     [0.42, 0.62],
     [0.6, 0.62],

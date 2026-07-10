@@ -8,6 +8,7 @@ import {
   lockToConstructionAxis,
   polygonAreaMm2,
   polygonPerimeterMm,
+  validateNextPolygonPoint,
   validatePolygon,
 } from "./geometry";
 
@@ -31,10 +32,26 @@ describe("building geometry", () => {
       validatePolygon([
         { x: 0, y: 0 },
         { x: 1000, y: 1000 },
-        { x: 0, y: 1000 },
+        { x: 0, y: -1000 },
         { x: 1000, y: 0 },
       ]),
     ).toBe("Foundation edges cannot cross.");
+  });
+
+  it("rejects a crossing segment before it corrupts the foundation draft", () => {
+    expect(
+      validateNextPolygonPoint(
+        [
+          { x: 0, y: 0 },
+          { x: 2000, y: 0 },
+          { x: 2000, y: 2000 },
+        ],
+        { x: 0, y: -1000 },
+      ),
+    ).toBe("That segment crosses an existing foundation edge.");
+    expect(validateNextPolygonPoint([{ x: 0, y: 0 }], { x: 0, y: 0 })).toBe(
+      "Foundation edges must be at least 1 mm long.",
+    );
   });
 
   it("locks to rotated construction axes", () => {

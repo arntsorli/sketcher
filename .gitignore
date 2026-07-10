@@ -5,6 +5,7 @@ release/
 coverage/
 artifacts/
 .smoke/
+.e2e/
 .vite/
 *.log
 *.sketcher

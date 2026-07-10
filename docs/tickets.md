@@ -13,20 +13,21 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-005 | Versioned domain schema and migrations | Done | SK-002 | Migration, integrity, and future-version tests |
 | SK-006 | Undoable editor state and global settings | In progress | SK-005 | Command coalescing and failure-path tests |
 | SK-007 | Three.js viewport, navigation, selection, transforms | In progress | SK-006 | Transform/rebuild and large-coordinate tests |
-| SK-008 | Foundation drawing and dimensions | Done for v0.1 | SK-007 | Geometry tests and direct-input smoke |
+| SK-008 | Foundation drawing and dimensions | Done for v0.1.4 | SK-007 | Unit, smoke, and direct-input persistence E2E |
 | SK-009 | Floors and wall modelling | In progress | SK-008 | Snap/alignment and dependency tests |
 | SK-010 | Openings, stairs, and gable roof | In progress | SK-009 | Geometry golden tests |
 | SK-011 | Geometry worker and Manifold integration | In progress | SK-010 | All-solid coverage, cancellation, golden tests |
 | SK-012 | Building library and shared instances | In progress | SK-009 | Shared/unique propagation automation |
 | SK-013 | Scene objects and GLB interchange | In progress | SK-007 | Textured GLB round-trip fixtures |
-| SK-014 | Terrain provider framework and online Norway terrain | Done for v0.1 | SK-007 | Live provider and cached project smoke |
+| SK-014 | Terrain provider framework and online Norway terrain | In progress | SK-007 | Live provider and cached offline-reopen smoke |
 | SK-015 | GeoTIFF and optional orthophoto providers | In progress | SK-014 | GeoTIFF fixture and credential-path tests |
-| SK-016 | Accessibility, performance, and failure hardening | Todo | SK-004–SK-015 | E2E, profiling, corrupt input suite |
+| SK-016 | Accessibility, performance, and failure hardening | In progress | SK-004–SK-015 | E2E, profiling, corrupt input suite |
 | SK-017 | Documentation and operator guidance | In progress | All feature tickets | Workflow illustrations and user guide |
 | SK-018 | Windows CI, packaging, and release automation | Done for tagged releases | SK-016 | Green public Actions and release runs |
 | SK-019 | Public GitHub publication | Done | SK-018 | Public remote, clean main, green workflow |
 | SK-020 | Configurable canvas background colour | Done | SK-006, SK-007 | Settings persistence, viewport application, and contrast check |
 | SK-021 | Top-down Builder and assisted opening placement | Done for v0.1.3 | SK-008–SK-010 | Top-view, snapping, preview, clearance, and finalized-dimension smoke |
+| SK-022 | Foundation robustness and E2E automation | In progress | SK-003, SK-008, SK-016 | Direct-input save/reopen E2E plus broader workflow coverage |
 
 ## Ticket details
 
@@ -75,6 +76,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Zod validation on pack and unpack.
 - Atomic temp/backup replacement preserving the previous valid save on failure.
 - Configurable project library, recent index, Save As, 30-second recovery default, restore/discard, and Recycle Bin integration.
+- Playwright E2E covers create, normal Save, Home reopen, and Builder re-entry for a real `.sketcher` project.
 
 **Todo / hardening**
 
@@ -163,14 +165,13 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Grid and construction-axis snapping, closure snapping, 5° Shift+wheel offset, provisional geometry, direct numeric input, validation, area, perimeter, and automatic transition to wall work.
 - Builder uses a locked orthographic top view with no camera rotation; nearby vertices and edges take priority over axes and grid using an aggressive screen-scaled snap radius.
 - Projected SVG dimension lines, end stops, aligned millimetre labels, and Builder-only display.
-- Self-intersection, zero-length, too-few-points, and zero-area checks.
+- Self-intersection, zero-length, too-few-points, and zero-area checks. Crossing and duplicate edges are rejected before entering the draft; Backspace and the visible Undo last point action recover individual vertices without discarding the polygon.
+- Direct-input E2E creates a 5000×8000 mm foundation, removes/re-adds a point, saves, reopens, and verifies the 40.00 m² definition in Builder.
 
 **Todo / hardening**
 
-- Convert fixed 250 mm model closure tolerance to the configured screen-space snap tolerance.
-- Add existing-edge and existing-vertex priority before axes/grid.
 - Add depth/occlusion fading for dimension labels.
-- Verify direct-input focus remains selected without blocking pointer drawing.
+- Add explicit snap-target glyphs for edges and axis/grid intersections, not only the highlighted foundation closure target.
 
 **Acceptance scenario**
 
@@ -271,6 +272,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **Todo / hardening**
 
 - Add request progress, cancellation, retry, per-provider timeout, and offline cached-service messaging.
+- Reopen a cached terrain project with networking disabled; current smoke validates acquisition and archive embedding, not the offline restart path.
 - Chunk and LOD terrain rather than a single mesh; enforce resident triangle/cache budgets.
 - Use reprojection metadata and UTM local anchor rather than an EPSG:4258-only sampled grid.
 - Add provider contract tests with recorded fixtures so CI does not depend on live services.
@@ -295,6 +297,10 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 ### SK-016 — Accessibility, performance, and failure hardening
 
 **Outcome:** The complete workflow is safe and responsive on a representative Windows machine.
+
+**Implemented baseline**
+
+- Playwright Electron E2E now runs in Windows CI after the focused runtime smoke. It covers direct numeric foundation creation, point undo, Save, Home reopen, and Builder re-entry.
 
 **Todo**
 
@@ -346,7 +352,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Reviewed and committed only the Sketcher source tree; generated builds, smoke state, captures, and dependencies remain ignored.
 - Published the public `arntsorli/sketcher` repository with `main` as its default branch.
 - Added description and architecture, CAD, Electron, Three.js, TypeScript, and Windows topics.
-- Verified Windows CI and the public `v0.1.1` release workflow, release assets, and checksums.
+- Verified Windows CI and the public `v0.1.3` release workflow, release assets, and checksums.
 
 ### SK-020 — Configurable canvas background colour
 
@@ -380,6 +386,22 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Add visible snap-target glyphs and configurable opening presets/clearance defaults.
 
+### SK-022 — Foundation robustness and E2E automation
+
+**Outcome:** The principal modelling workflow catches draft errors early and remains protected by real desktop workflows, not only isolated geometry tests.
+
+**Implemented**
+
+- Reject duplicate and crossing foundation segments before they are added to the draft.
+- Make closure a precise snap to the highlighted first vertex; Enter also closes when the closure snap is active.
+- Preserve placed vertices when Escape cancels a segment; Backspace and a tool-rail action remove only the last point.
+- Add a separate Playwright E2E script and Windows CI job for direct-input foundation creation, undo, save, reopen, and Builder edit verification.
+
+**Remaining coverage**
+
+- Add E2E journeys for multi-room walls, doors/windows, stairs, roof persistence, shared-instance propagation, asset GLB interchange, delete/recovery, terrain offline reopening, and corrupt-file/error handling.
+- Add visual assertions for snap glyphs, dimension readability, screen scaling, and selected-object outlines.
+
 ## Release acceptance checklist
 
 - [x] Packaged Windows application launches and reports the package version.
@@ -388,7 +410,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - [ ] External/internal walls, a door, a window, second floor, straight stair opening, and gable roof persist after restart.
 - [ ] Two shared building instances update together; Make Unique detaches one.
 - [ ] Procedural and imported objects select, focus, transform, persist, and export.
-- [x] Online terrain normalizes centre elevation to Z=0 and is embedded with its cached map for offline reopening.
+- [ ] Online terrain normalizes centre elevation to Z=0 and embeds its cached map; offline restart verification remains open.
 - [ ] GeoTIFF terrain imports with correct orientation, scale, and no-data handling.
 - [x] Local CI, dependency audit, build, NSIS, portable packaging, and unpacked-runtime smoke pass.
 - [x] Public `main` is clean, synchronized, and green.

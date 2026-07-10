@@ -631,10 +631,20 @@ export function SceneCanvas() {
       );
       line.renderOrder = 999;
       engine.draft.add(line);
-      for (const point of points) {
+      const closureTarget =
+        tool === "foundation" &&
+        draft.points.length >= 3 &&
+        draft.points[0] &&
+        draft.hover &&
+        distance(draft.points[0], draft.hover) < 1;
+      for (const [index, point] of points.entries()) {
+        const isClosureTarget = closureTarget && index === 0;
         const marker = new THREE.Mesh(
-          new THREE.SphereGeometry(0.06, 12, 8),
-          new THREE.MeshBasicMaterial({ color: 0x9bddff, depthTest: false }),
+          new THREE.SphereGeometry(isClosureTarget ? 0.11 : 0.06, 12, 8),
+          new THREE.MeshBasicMaterial({
+            color: isClosureTarget ? 0x37e0a5 : 0x9bddff,
+            depthTest: false,
+          }),
         );
         marker.position.set(point.x / 1000, point.y / 1000, 0.02);
         marker.renderOrder = 1000;
@@ -689,7 +699,7 @@ export function SceneCanvas() {
       guideLine.renderOrder = 999;
       engine.draft.add(guideLine);
     }
-  }, [draft, openingPreview]);
+  }, [draft, openingPreview, tool]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -829,6 +839,44 @@ export function SceneCanvas() {
       if (event.key.toLowerCase() === "s" && state.selection?.type === "asset")
         engine.transform.setMode("scale");
       if (state.mode !== "builder" || !["foundation", "wall"].includes(state.tool)) return;
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target !== inputRef.current) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (state.tool === "wall" && state.draft.wallStart) {
+          state.setDraft({ wallStart: undefined, numericInput: "", hover: undefined });
+          state.setStatus("Wall segment cancelled");
+        } else {
+          state.setDraft({ numericInput: "", hover: undefined });
+          state.setStatus("Current segment cancelled");
+        }
+        return;
+      }
+      if (event.key === "Backspace") {
+        if (state.draft.numericInput) {
+          event.preventDefault();
+          state.setDraft({ numericInput: state.draft.numericInput.slice(0, -1) });
+        } else if (state.tool === "foundation" && state.draft.points.length > 0) {
+          event.preventDefault();
+          state.removeLastFoundationPoint();
+        } else if (state.tool === "wall" && state.draft.wallStart) {
+          event.preventDefault();
+          state.setDraft({ wallStart: undefined, hover: undefined });
+        }
+        return;
+      }
+      if (
+        event.key === "Enter" &&
+        state.tool === "foundation" &&
+        state.draft.points.length >= 3 &&
+        state.draft.points[0] &&
+        state.draft.hover &&
+        distance(state.draft.points[0], state.draft.hover) < 1
+      ) {
+        event.preventDefault();
+        state.finishFoundation();
+        return;
+      }
       const hasOrigin =
         state.tool === "wall" ? state.draft.wallStart : state.draft.points.length > 0;
       if (!hasOrigin) return;
@@ -838,9 +886,6 @@ export function SceneCanvas() {
         state.setDraft({ numericInput: next });
         inputRef.current?.focus();
         requestAnimationFrame(() => inputRef.current?.select());
-      }
-      if (event.key === "Escape") {
-        state.setDraft({ points: [], wallStart: undefined, numericInput: "", hover: undefined });
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -1008,7 +1053,11 @@ export function SceneCanvas() {
           onChange={(event) => setDraft({ numericInput: event.target.value })}
           onFocus={(event) => event.currentTarget.select()}
           onKeyDown={(event) => {
-            if (event.key === "Enter") commitNumeric();
+            event.stopPropagation();
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitNumeric();
+            }
             if (event.key === "Escape") setDraft({ numericInput: "" });
           }}
         />

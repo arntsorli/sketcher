@@ -46,6 +46,7 @@ export function EditorShell({ onSettings }: Props) {
   const placeAsset = useEditorStore((state) => state.placeAsset);
   const importAsset = useEditorStore((state) => state.importAsset);
   const finishFoundation = useEditorStore((state) => state.finishFoundation);
+  const removeLastFoundationPoint = useEditorStore((state) => state.removeLastFoundationPoint);
   const addRoof = useEditorStore((state) => state.addRoof);
   const save = useEditorStore((state) => state.save);
   const closeProject = useEditorStore((state) => state.closeProject);
@@ -179,6 +180,13 @@ export function EditorShell({ onSettings }: Props) {
                     onClick={finishFoundation}
                   >
                     Close foundation
+                  </button>
+                  <button
+                    className="button secondary wide small"
+                    disabled={draft.points.length === 0}
+                    onClick={removeLastFoundationPoint}
+                  >
+                    Undo last point
                   </button>
                 </>
               ) : (

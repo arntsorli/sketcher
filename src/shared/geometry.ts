@@ -112,6 +112,20 @@ export function validatePolygon(points: Vec2[]): string | null {
   return null;
 }
 
+export function validateNextPolygonPoint(points: Vec2[], next: Vec2): string | null {
+  const previous = points.at(-1);
+  if (!previous) return null;
+  if (distance(previous, next) < 1) return "Foundation edges must be at least 1 mm long.";
+  for (let index = 0; index < points.length - 2; index += 1) {
+    const start = points[index];
+    const end = points[index + 1];
+    if (start && end && segmentsIntersect(previous, next, start, end)) {
+      return "That segment crosses an existing foundation edge.";
+    }
+  }
+  return null;
+}
+
 export function snapToGrid(point: Vec2, spacing: number): Vec2 {
   return {
     x: Math.round(point.x / spacing) * spacing,

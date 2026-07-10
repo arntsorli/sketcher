@@ -25,6 +25,8 @@ jobs:
       - run: npm audit --audit-level=high
       - name: Electron runtime smoke
         run: node scripts/smoke.mjs
+      - name: Foundation workflow E2E
+        run: node scripts/e2e.mjs
       - name: Upload smoke captures on failure
         if: failure()
         uses: actions/upload-artifact@v4
