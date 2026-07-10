@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateOpeningPlacement,
   calculateStair,
   formatArea,
   gablePanelRotation,
@@ -53,5 +54,60 @@ describe("building geometry", () => {
     expect(gablePanelRotation(1, true, pitch)).toEqual({ x: -pitch, y: 0 });
     expect(gablePanelRotation(-1, false, pitch)).toEqual({ x: 0, y: -pitch });
     expect(gablePanelRotation(1, false, pitch)).toEqual({ x: 0, y: pitch });
+  });
+
+  it("previews generous door placement and side clearances", () => {
+    const wall = {
+      id: "wall",
+      floorId: "floor",
+      start: { x: 0, y: 0 },
+      end: { x: 5000, y: 0 },
+      type: "external" as const,
+      typeSource: "auto" as const,
+      thickness: 250,
+      alignment: "inside" as const,
+    };
+    const placement = calculateOpeningPlacement(
+      [wall],
+      [
+        {
+          id: "existing",
+          floorId: "floor",
+          wallId: "wall",
+          kind: "door" as const,
+          width: 900,
+          height: 2100,
+          offset: 1000,
+          sillHeight: 0,
+        },
+      ],
+      "floor",
+      { x: 3000, y: 900 },
+      1200,
+    );
+    expect(placement?.valid).toBe(true);
+    expect(placement?.offset).toBe(2400);
+    expect(placement?.clearances).toMatchObject({ left: 500, right: 1400 });
+    expect(placement?.start).toEqual({ x: 2400, y: 0 });
+    expect(placement?.end).toEqual({ x: 3600, y: 0 });
+    const overlapping = calculateOpeningPlacement(
+      [wall],
+      [
+        {
+          id: "existing",
+          floorId: "floor",
+          wallId: "wall",
+          kind: "door" as const,
+          width: 900,
+          height: 2100,
+          offset: 1000,
+          sillHeight: 0,
+        },
+      ],
+      "floor",
+      { x: 1500, y: 0 },
+      900,
+    );
+    expect(overlapping?.valid).toBe(false);
   });
 });

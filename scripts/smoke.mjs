@@ -63,6 +63,8 @@ try {
 
   await window.getByRole("button", { name: "New building" }).click();
   await window.getByText("Draw the foundation").waitFor({ state: "visible" });
+  await window.locator('.scene-host[data-view="top-locked"]').waitFor({ state: "visible" });
+  await window.getByText("Locked top view").waitFor({ state: "visible" });
   const canvas = window.locator(".scene-host canvas");
   const bounds = await canvas.boundingBox();
   if (!bounds) throw new Error("3D canvas has no visible bounds.");
@@ -96,6 +98,18 @@ try {
   if (rendererMessages.some((message) => message.includes("Manifold wall generation failed"))) {
     throw new Error("Manifold worker fell back during the smoke journey.");
   }
+  await window.getByRole("button", { name: /Door/ }).click();
+  await window.mouse.move(bounds.x + bounds.width * 0.51, bounds.y + bounds.height * 0.57);
+  await window
+    .locator('.scene-host[data-opening-preview="valid"]')
+    .waitFor({ state: "visible", timeout: 10_000 });
+  await window.getByText(/^Door 900 mm$/).waitFor({ state: "visible" });
+  await window.getByText(/^L \d+ mm$/).waitFor({ state: "visible" });
+  await canvas.click({ position: { x: bounds.width * 0.51, y: bounds.height * 0.57 } });
+  await window
+    .locator('.scene-host[data-opening-preview="invalid"]')
+    .waitFor({ state: "visible", timeout: 10_000 });
+  await window.getByText(/^R \d+ mm$/).waitFor({ state: "visible" });
   await window.getByRole("button", { name: "+ Gable roof" }).click();
   await window.getByText("Gable properties").waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "gable-roof.png") });

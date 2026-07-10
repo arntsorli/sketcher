@@ -1,6 +1,29 @@
-import type { BuildingDefinition, Vec2, Wall } from "./model";
+import type { BuildingDefinition, Opening, Vec2, Wall } from "./model";
 
 const EPSILON = 1e-6;
+export const OPENING_SNAP_RADIUS_MM = 1200;
+export const MIN_OPENING_CLEARANCE_MM = 50;
+
+export interface OpeningClearances {
+  leftBoundaryOffset: number;
+  rightBoundaryOffset: number;
+  left: number;
+  right: number;
+}
+
+export interface OpeningPlacement {
+  wall: Wall;
+  offset: number;
+  width: number;
+  proximity: number;
+  projection: Vec2;
+  start: Vec2;
+  end: Vec2;
+  center: Vec2;
+  clearances: OpeningClearances;
+  valid: boolean;
+  reason?: string;
+}
 
 export function distance(a: Vec2, b: Vec2): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
@@ -93,6 +116,104 @@ export function snapToGrid(point: Vec2, spacing: number): Vec2 {
   return {
     x: Math.round(point.x / spacing) * spacing,
     y: Math.round(point.y / spacing) * spacing,
+  };
+}
+
+export function pointAlongWall(wall: Wall, offset: number): Vec2 {
+  const length = distance(wall.start, wall.end);
+  if (length < EPSILON) return wall.start;
+  const clamped = Math.max(0, Math.min(length, offset));
+  return {
+    x: wall.start.x + ((wall.end.x - wall.start.x) / length) * clamped,
+    y: wall.start.y + ((wall.end.y - wall.start.y) / length) * clamped,
+  };
+}
+
+export function openingClearances(
+  wall: Wall,
+  openings: Opening[],
+  offset: number,
+  width: number,
+  ignoreOpeningId?: string,
+): OpeningClearances {
+  const length = distance(wall.start, wall.end);
+  const end = offset + width;
+  const neighbours = openings
+    .filter((opening) => opening.wallId === wall.id && opening.id !== ignoreOpeningId)
+    .sort((left, right) => left.offset - right.offset);
+  const previous = [...neighbours]
+    .reverse()
+    .find((opening) => opening.offset + opening.width <= offset + EPSILON);
+  const next = neighbours.find((opening) => opening.offset >= end - EPSILON);
+  const leftBoundaryOffset = previous ? previous.offset + previous.width : 0;
+  const rightBoundaryOffset = next ? next.offset : length;
+  return {
+    leftBoundaryOffset,
+    rightBoundaryOffset,
+    left: offset - leftBoundaryOffset,
+    right: rightBoundaryOffset - end,
+  };
+}
+
+export function calculateOpeningPlacement(
+  walls: Wall[],
+  openings: Opening[],
+  floorId: string,
+  point: Vec2,
+  width: number,
+  snapRadius = OPENING_SNAP_RADIUS_MM,
+  minimumClearance = MIN_OPENING_CLEARANCE_MM,
+): OpeningPlacement | null {
+  const candidates = walls
+    .filter((wall) => wall.floorId === floorId)
+    .map((wall) => {
+      const length = distance(wall.start, wall.end);
+      const dx = wall.end.x - wall.start.x;
+      const dy = wall.end.y - wall.start.y;
+      const rawOffset =
+        length < EPSILON
+          ? 0
+          : ((point.x - wall.start.x) * dx + (point.y - wall.start.y) * dy) / length;
+      const projection = pointAlongWall(wall, rawOffset);
+      return { wall, length, rawOffset, projection, proximity: distance(projection, point) };
+    })
+    .filter((candidate) => candidate.length >= width + minimumClearance * 2)
+    .sort((left, right) => left.proximity - right.proximity);
+  const candidate = candidates[0];
+  if (!candidate) return null;
+  const offset = Math.max(
+    minimumClearance,
+    Math.min(candidate.length - width - minimumClearance, candidate.rawOffset - width / 2),
+  );
+  const clearances = openingClearances(candidate.wall, openings, offset, width);
+  const validClearances =
+    clearances.left >= minimumClearance - EPSILON && clearances.right >= minimumClearance - EPSILON;
+  const overlaps = openings.some(
+    (opening) =>
+      opening.wallId === candidate.wall.id &&
+      offset < opening.offset + opening.width + minimumClearance &&
+      offset + width + minimumClearance > opening.offset,
+  );
+  const validProximity = candidate.proximity <= snapRadius;
+  const reason = !validProximity
+    ? `Move within ${snapRadius} mm of a wall.`
+    : overlaps
+      ? `Keep ${minimumClearance} mm clear of adjacent openings and wall ends.`
+      : !validClearances
+        ? `Keep ${minimumClearance} mm clear of adjacent openings and wall ends.`
+        : undefined;
+  return {
+    wall: candidate.wall,
+    offset,
+    width,
+    proximity: candidate.proximity,
+    projection: candidate.projection,
+    start: pointAlongWall(candidate.wall, offset),
+    end: pointAlongWall(candidate.wall, offset + width),
+    center: pointAlongWall(candidate.wall, offset + width / 2),
+    clearances,
+    valid: validProximity && validClearances && !overlaps,
+    reason,
   };
 }
 

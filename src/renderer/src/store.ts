@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import { calculateStair, createWall, distance, validatePolygon } from "../../shared/geometry";
+import {
+  calculateOpeningPlacement,
+  calculateStair,
+  createWall,
+  distance,
+  validatePolygon,
+} from "../../shared/geometry";
 import type { ProjectArchive, ProjectCard } from "../../shared/ipc";
 import {
   createBuilding,
@@ -396,44 +402,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const building = selectedBuildingDefinition(state);
     const floorId = activeFloorId(state);
     if (!building || !floorId) return;
-    const candidates = building.walls
-      .filter((wall) => wall.floorId === floorId)
-      .map((wall) => {
-        const dx = wall.end.x - wall.start.x;
-        const dy = wall.end.y - wall.start.y;
-        const length = Math.hypot(dx, dy);
-        const offset = Math.max(
-          0,
-          Math.min(
-            length,
-            ((point.x - wall.start.x) * dx + (point.y - wall.start.y) * dy) / length,
-          ),
-        );
-        const projected = {
-          x: wall.start.x + (dx / length) * offset,
-          y: wall.start.y + (dy / length) * offset,
-        };
-        return { wall, offset, proximity: distance(projected, point), length };
-      })
-      .sort((left, right) => left.proximity - right.proximity);
-    const candidate = candidates[0];
     const width = kind === "door" ? 900 : 1200;
-    if (!candidate || candidate.proximity > 500 || candidate.length < width + 100) {
-      set({ error: "Click within 500 mm of a wall with enough clear length." });
-      return;
-    }
-    const centeredOffset = Math.max(
-      50,
-      Math.min(candidate.length - width - 50, candidate.offset - width / 2),
+    const placement = calculateOpeningPlacement(
+      building.walls,
+      building.openings,
+      floorId,
+      point,
+      width,
     );
-    const overlaps = building.openings.some(
-      (opening) =>
-        opening.wallId === candidate.wall.id &&
-        centeredOffset < opening.offset + opening.width + 50 &&
-        centeredOffset + width + 50 > opening.offset,
-    );
-    if (overlaps) {
-      set({ error: "Openings on the same wall need at least 50 mm clearance." });
+    if (!placement?.valid) {
+      set({ error: placement?.reason ?? "Choose a wall with enough clear length." });
       return;
     }
     get().commit(`${kind === "door" ? "Door" : "Window"} added`, (project) => {
@@ -442,11 +420,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ?.openings.push({
           id: crypto.randomUUID(),
           floorId,
-          wallId: candidate.wall.id,
+          wallId: placement.wall.id,
           kind,
           width,
           height: kind === "door" ? 2100 : 1200,
-          offset: centeredOffset,
+          offset: placement.offset,
           sillHeight: kind === "door" ? 0 : 900,
         });
     });

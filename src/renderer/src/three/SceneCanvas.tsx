@@ -7,12 +7,16 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import {
+  calculateOpeningPlacement,
   distance,
   lockToConstructionAxis,
+  OPENING_SNAP_RADIUS_MM,
+  openingClearances,
+  pointAlongWall,
   pointAtLength,
   snapToGrid,
 } from "../../../shared/geometry";
-import type { Vec2 } from "../../../shared/model";
+import type { ProjectDocument, Vec2, Wall } from "../../../shared/model";
 import { useEditorStore } from "../store";
 import { buildWallSolid } from "../workers/geometryClient";
 import type { WallSolidRequest } from "../workers/geometryTypes";
@@ -59,9 +63,13 @@ const DEFAULT_CANVAS_BACKGROUND = "#dfe7ee";
 
 type SceneEngine = {
   scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+  architectureCamera: THREE.PerspectiveCamera;
+  builderCamera: THREE.OrthographicCamera;
+  builderViewHeight: number;
   renderer: THREE.WebGLRenderer;
   composer: EffectComposer;
+  renderPass: RenderPass;
   outline: OutlinePass;
   orbit: OrbitControls;
   transform: TransformControls;
@@ -88,6 +96,157 @@ function applyCanvasAppearance(engine: SceneEngine, backgroundColor: string): vo
   });
 }
 
+function builderSnapRadiusMm(
+  engine: SceneEngine,
+  viewportWidth: number,
+  configuredPixels: number,
+): number {
+  if (!(engine.camera instanceof THREE.OrthographicCamera)) {
+    return Math.max(300, configuredPixels * 30);
+  }
+  const worldWidth = (engine.camera.right - engine.camera.left) / engine.camera.zoom;
+  const pixels = Math.max(24, configuredPixels * 2);
+  return Math.max(150, Math.min(1200, (worldWidth * 1000 * pixels) / viewportWidth));
+}
+
+function closestPointOnSegment(point: Vec2, start: Vec2, end: Vec2): Vec2 {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return start;
+  const t = Math.max(
+    0,
+    Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared),
+  );
+  return { x: start.x + dx * t, y: start.y + dy * t };
+}
+
+function aggressiveBuilderSnap(
+  point: Vec2,
+  project: ProjectDocument | undefined,
+  activeBuildingId: string | undefined,
+  tool: string,
+  draftPoints: Vec2[],
+  radius: number,
+): Vec2 | null {
+  const building = project?.buildingDefinitions.find((item) => item.id === activeBuildingId);
+  const vertices = [...draftPoints];
+  const segments: Array<{ start: Vec2; end: Vec2 }> = [];
+  for (let index = 1; index < draftPoints.length; index += 1) {
+    const start = draftPoints[index - 1];
+    const end = draftPoints[index];
+    if (start && end) segments.push({ start, end });
+  }
+  if (building) {
+    vertices.push(
+      ...building.footprint,
+      ...building.walls.flatMap((wall) => [wall.start, wall.end]),
+    );
+    for (let index = 0; index < building.footprint.length; index += 1) {
+      const start = building.footprint[index];
+      const end = building.footprint[(index + 1) % building.footprint.length];
+      if (start && end) segments.push({ start, end });
+    }
+    segments.push(...building.walls.map((wall) => ({ start: wall.start, end: wall.end })));
+  }
+  const nearestVertex = vertices
+    .map((vertex) => ({ vertex, proximity: distance(point, vertex) }))
+    .sort((left, right) => left.proximity - right.proximity)[0];
+  if (nearestVertex && nearestVertex.proximity <= radius) return nearestVertex.vertex;
+  if (tool === "foundation" && draftPoints[0] && distance(point, draftPoints[0]) <= radius) {
+    return draftPoints[0];
+  }
+  const nearestEdge = segments
+    .map((segment) => {
+      const snapped = closestPointOnSegment(point, segment.start, segment.end);
+      return { snapped, proximity: distance(point, snapped) };
+    })
+    .sort((left, right) => left.proximity - right.proximity)[0];
+  return nearestEdge && nearestEdge.proximity <= radius ? nearestEdge.snapped : null;
+}
+
+function projectDimension(
+  engine: SceneEngine,
+  rect: DOMRect,
+  key: string,
+  start: Vec2,
+  end: Vec2,
+  text: string,
+  offset: number,
+): DimensionLine {
+  const a = new THREE.Vector3(start.x / 1000, start.y / 1000, 0.03).project(engine.camera);
+  const b = new THREE.Vector3(end.x / 1000, end.y / 1000, 0.03).project(engine.camera);
+  const x1 = ((a.x + 1) / 2) * rect.width;
+  const y1 = ((1 - a.y) / 2) * rect.height;
+  const x2 = ((b.x + 1) / 2) * rect.width;
+  const y2 = ((1 - b.y) / 2) * rect.height;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const screenLength = Math.max(1, Math.hypot(dx, dy));
+  const offsetX = (-dy / screenLength) * offset;
+  const offsetY = (dx / screenLength) * offset;
+  return {
+    key,
+    x1: x1 + offsetX,
+    y1: y1 + offsetY,
+    x2: x2 + offsetX,
+    y2: y2 + offsetY,
+    labelX: (x1 + x2) / 2 + offsetX,
+    labelY: (y1 + y2) / 2 + offsetY,
+    angle: (Math.atan2(dy, dx) * 180) / Math.PI,
+    text,
+  };
+}
+
+function appendOpeningDimensions(
+  lines: DimensionLine[],
+  engine: SceneEngine,
+  rect: DOMRect,
+  key: string,
+  wall: Wall,
+  offset: number,
+  width: number,
+  clearances: {
+    leftBoundaryOffset: number;
+    rightBoundaryOffset: number;
+    left: number;
+    right: number;
+  },
+  label: string,
+): void {
+  const leftBoundary = pointAlongWall(wall, clearances.leftBoundaryOffset);
+  const start = pointAlongWall(wall, offset);
+  const end = pointAlongWall(wall, offset + width);
+  const rightBoundary = pointAlongWall(wall, clearances.rightBoundaryOffset);
+  if (clearances.left > 1) {
+    lines.push(
+      projectDimension(
+        engine,
+        rect,
+        `${key}-left`,
+        leftBoundary,
+        start,
+        `L ${Math.round(clearances.left)} mm`,
+        36,
+      ),
+    );
+  }
+  lines.push(projectDimension(engine, rect, `${key}-opening`, start, end, label, 56));
+  if (clearances.right > 1) {
+    lines.push(
+      projectDimension(
+        engine,
+        rect,
+        `${key}-right`,
+        end,
+        rightBoundary,
+        `R ${Math.round(clearances.right)} mm`,
+        36,
+      ),
+    );
+  }
+}
+
 export function SceneCanvas() {
   const hostRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +259,7 @@ export function SceneCanvas() {
   const tool = useEditorStore((state) => state.tool);
   const selection = useEditorStore((state) => state.selection);
   const activeBuildingId = useEditorStore((state) => state.activeBuildingId);
+  const activeFloorId = useEditorStore((state) => state.activeFloorId);
   const draft = useEditorStore((state) => state.draft);
   const setDraft = useEditorStore((state) => state.setDraft);
   const addFoundationPoint = useEditorStore((state) => state.addFoundationPoint);
@@ -111,6 +271,17 @@ export function SceneCanvas() {
   const assets = useEditorStore((state) => state.assets);
   const terrainAssets = useEditorStore((state) => state.terrainAssets);
   const settings = useEditorStore((state) => state.settings);
+  const activeBuilding = project?.buildingDefinitions.find((item) => item.id === activeBuildingId);
+  const openingPreview =
+    activeBuilding && activeFloorId && draft.hover && (tool === "door" || tool === "window")
+      ? calculateOpeningPlacement(
+          activeBuilding.walls,
+          activeBuilding.openings,
+          activeFloorId,
+          draft.hover,
+          tool === "door" ? 900 : 1200,
+        )
+      : null;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -118,14 +289,26 @@ export function SceneCanvas() {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(DEFAULT_CANVAS_BACKGROUND);
     scene.fog = new THREE.FogExp2(DEFAULT_CANVAS_BACKGROUND, 0.012);
-    const camera = new THREE.PerspectiveCamera(
+    const architectureCamera = new THREE.PerspectiveCamera(
       45,
       host.clientWidth / host.clientHeight,
       0.01,
       5000,
     );
-    camera.up.set(0, 0, 1);
-    camera.position.set(14, -16, 12);
+    architectureCamera.up.set(0, 0, 1);
+    architectureCamera.position.set(14, -16, 12);
+    const builderViewHeight = 14;
+    const builderCamera = new THREE.OrthographicCamera(
+      (-builderViewHeight * architectureCamera.aspect) / 2,
+      (builderViewHeight * architectureCamera.aspect) / 2,
+      builderViewHeight / 2,
+      -builderViewHeight / 2,
+      0.01,
+      5000,
+    );
+    builderCamera.up.set(0, 1, 0);
+    builderCamera.position.set(0, 0, 100);
+    builderCamera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -140,7 +323,7 @@ export function SceneCanvas() {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     host.appendChild(renderer.domElement);
 
-    const orbit = new OrbitControls(camera, renderer.domElement);
+    const orbit = new OrbitControls(architectureCamera, renderer.domElement);
     orbit.target.set(2, 2, 0);
     orbit.enableDamping = true;
     orbit.dampingFactor = 0.08;
@@ -173,11 +356,12 @@ export function SceneCanvas() {
     scene.add(content, draftGroup);
 
     const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
+    const renderPass = new RenderPass(scene, architectureCamera);
+    composer.addPass(renderPass);
     const outline = new OutlinePass(
       new THREE.Vector2(host.clientWidth, host.clientHeight),
       scene,
-      camera,
+      architectureCamera,
     );
     outline.edgeStrength = 4;
     outline.edgeThickness = 1.5;
@@ -185,7 +369,7 @@ export function SceneCanvas() {
     outline.hiddenEdgeColor.set(0x2b78c5);
     composer.addPass(outline);
 
-    const transform = new TransformControls(camera, renderer.domElement);
+    const transform = new TransformControls(architectureCamera, renderer.domElement);
     transform.setSize(0.8);
     transform.setRotationSnap((5 * Math.PI) / 180);
     scene.add(transform.getHelper());
@@ -195,9 +379,13 @@ export function SceneCanvas() {
 
     const engine = {
       scene,
-      camera,
+      camera: architectureCamera,
+      architectureCamera,
+      builderCamera,
+      builderViewHeight,
       renderer,
       composer,
+      renderPass,
       outline,
       orbit,
       transform,
@@ -211,8 +399,13 @@ export function SceneCanvas() {
 
     const resizeObserver = new ResizeObserver(() => {
       if (!host.clientWidth || !host.clientHeight) return;
-      camera.aspect = host.clientWidth / host.clientHeight;
-      camera.updateProjectionMatrix();
+      architectureCamera.aspect = host.clientWidth / host.clientHeight;
+      architectureCamera.updateProjectionMatrix();
+      builderCamera.left = (-engine.builderViewHeight * architectureCamera.aspect) / 2;
+      builderCamera.right = (engine.builderViewHeight * architectureCamera.aspect) / 2;
+      builderCamera.top = engine.builderViewHeight / 2;
+      builderCamera.bottom = -engine.builderViewHeight / 2;
+      builderCamera.updateProjectionMatrix();
       renderer.setSize(host.clientWidth, host.clientHeight);
       composer.setSize(host.clientWidth, host.clientHeight);
       outline.setSize(host.clientWidth, host.clientHeight);
@@ -244,6 +437,48 @@ export function SceneCanvas() {
     if (!engine) return;
     applyCanvasAppearance(engine, settings?.backgroundColor ?? DEFAULT_CANVAS_BACKGROUND);
   }, [settings?.backgroundColor]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    const host = hostRef.current;
+    if (!engine || !host) return;
+    if (mode === "builder") {
+      const footprint =
+        useEditorStore
+          .getState()
+          .project?.buildingDefinitions.find((item) => item.id === activeBuildingId)?.footprint ??
+        [];
+      const xs = footprint.map((point) => point.x);
+      const ys = footprint.map((point) => point.y);
+      const minX = xs.length ? Math.min(...xs) : -4000;
+      const maxX = xs.length ? Math.max(...xs) : 4000;
+      const minY = ys.length ? Math.min(...ys) : -4000;
+      const maxY = ys.length ? Math.max(...ys) : 4000;
+      const span = Math.max(maxX - minX, maxY - minY, 8000) / 1000;
+      engine.builderViewHeight = span * 1.7;
+      const aspect = host.clientWidth / host.clientHeight;
+      engine.builderCamera.left = (-engine.builderViewHeight * aspect) / 2;
+      engine.builderCamera.right = (engine.builderViewHeight * aspect) / 2;
+      engine.builderCamera.top = engine.builderViewHeight / 2;
+      engine.builderCamera.bottom = -engine.builderViewHeight / 2;
+      engine.builderCamera.position.set((minX + maxX) / 2000, (minY + maxY) / 2000, 100);
+      engine.builderCamera.lookAt((minX + maxX) / 2000, (minY + maxY) / 2000, 0);
+      engine.builderCamera.updateProjectionMatrix();
+      engine.camera = engine.builderCamera;
+      engine.orbit.object = engine.builderCamera;
+      engine.orbit.target.set((minX + maxX) / 2000, (minY + maxY) / 2000, 0);
+      engine.orbit.enableRotate = false;
+    } else {
+      engine.camera = engine.architectureCamera;
+      engine.orbit.object = engine.architectureCamera;
+      engine.orbit.enableRotate = true;
+      engine.orbit.maxPolarAngle = Math.PI * 0.49;
+    }
+    engine.renderPass.camera = engine.camera;
+    engine.outline.renderCamera = engine.camera;
+    engine.transform.camera = engine.camera;
+    engine.orbit.update();
+  }, [mode, activeBuildingId]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -379,6 +614,10 @@ export function SceneCanvas() {
     if (!engine) return;
     disposeGeometry(engine.draft);
     engine.draft.clear();
+    hostRef.current?.setAttribute(
+      "data-opening-preview",
+      openingPreview ? (openingPreview.valid ? "valid" : "invalid") : "none",
+    );
     const points = [...draft.points];
     if (draft.wallStart) points.push(draft.wallStart);
     if (draft.hover && (draft.points.length > 0 || draft.wallStart)) points.push(draft.hover);
@@ -402,7 +641,55 @@ export function SceneCanvas() {
         engine.draft.add(marker);
       }
     }
-  }, [draft]);
+    if (openingPreview) {
+      const { wall } = openingPreview;
+      const wallLength = distance(wall.start, wall.end);
+      const angle = Math.atan2(wall.end.y - wall.start.y, wall.end.x - wall.start.x);
+      const wallCenter = pointAlongWall(wall, wallLength / 2);
+      const guide = new THREE.Mesh(
+        new THREE.BoxGeometry(wallLength / 1000, (OPENING_SNAP_RADIUS_MM * 2) / 1000, 0.006),
+        new THREE.MeshBasicMaterial({
+          color: openingPreview.valid ? 0x36c7a1 : 0xe26d71,
+          transparent: true,
+          opacity: 0.09,
+          depthTest: false,
+        }),
+      );
+      guide.position.set(wallCenter.x / 1000, wallCenter.y / 1000, 0.035);
+      guide.rotation.z = angle;
+      guide.renderOrder = 996;
+      engine.draft.add(guide);
+      const preview = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          openingPreview.width / 1000,
+          Math.max(wall.thickness / 1000, 0.18),
+          0.03,
+        ),
+        new THREE.MeshBasicMaterial({
+          color: openingPreview.valid ? 0x20d5ac : 0xff6d72,
+          transparent: true,
+          opacity: 0.62,
+          depthTest: false,
+        }),
+      );
+      preview.position.set(openingPreview.center.x / 1000, openingPreview.center.y / 1000, 0.06);
+      preview.rotation.z = angle;
+      preview.renderOrder = 998;
+      engine.draft.add(preview);
+      const guideLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(wall.start.x / 1000, wall.start.y / 1000, 0.07),
+          new THREE.Vector3(wall.end.x / 1000, wall.end.y / 1000, 0.07),
+        ]),
+        new THREE.LineBasicMaterial({
+          color: openingPreview.valid ? 0x1ba990 : 0xd25c60,
+          depthTest: false,
+        }),
+      );
+      guideLine.renderOrder = 999;
+      engine.draft.add(guideLine);
+    }
+  }, [draft, openingPreview]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -422,19 +709,26 @@ export function SceneCanvas() {
       ) {
         return null;
       }
-      let point = snapToGrid(
-        { x: hit.x * 1000, y: hit.y * 1000 },
-        project?.settings.gridSpacing ?? 100,
-      );
+      const rawPoint = { x: hit.x * 1000, y: hit.y * 1000 };
       const current = useEditorStore.getState();
+      if (current.mode === "builder" && (current.tool === "door" || current.tool === "window")) {
+        return rawPoint;
+      }
+      const aggressiveSnap = aggressiveBuilderSnap(
+        rawPoint,
+        current.project,
+        current.activeBuildingId,
+        current.tool,
+        current.draft.points,
+        builderSnapRadiusMm(engine, rect.width, current.project?.settings.snapTolerance ?? 12),
+      );
+      if (aggressiveSnap) return aggressiveSnap;
       const origin =
         current.tool === "wall" ? current.draft.wallStart : current.draft.points.at(-1);
       if (current.mode === "builder" && origin) {
-        point = lockToConstructionAxis(origin, point, current.draft.axisAngle);
+        return lockToConstructionAxis(origin, rawPoint, current.draft.axisAngle);
       }
-      const first = current.draft.points[0];
-      if (current.tool === "foundation" && first && distance(first, point) <= 250) point = first;
-      return point;
+      return snapToGrid(rawPoint, project?.settings.gridSpacing ?? 100);
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -572,28 +866,57 @@ export function SceneCanvas() {
         const end = source[(index + 1) % source.length];
         if (!start || !end || (source === state.draft.points && index === source.length - 1))
           continue;
-        const a = new THREE.Vector3(start.x / 1000, start.y / 1000, 0.03).project(engine.camera);
-        const b = new THREE.Vector3(end.x / 1000, end.y / 1000, 0.03).project(engine.camera);
-        const x1 = ((a.x + 1) / 2) * rect.width;
-        const y1 = ((1 - a.y) / 2) * rect.height;
-        const x2 = ((b.x + 1) / 2) * rect.width;
-        const y2 = ((1 - b.y) / 2) * rect.height;
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const screenLength = Math.max(1, Math.hypot(dx, dy));
-        const offsetX = (-dy / screenLength) * 18;
-        const offsetY = (dx / screenLength) * 18;
-        lines.push({
-          key: `${index}-${start.x}-${start.y}`,
-          x1: x1 + offsetX,
-          y1: y1 + offsetY,
-          x2: x2 + offsetX,
-          y2: y2 + offsetY,
-          labelX: (x1 + x2) / 2 + offsetX,
-          labelY: (y1 + y2) / 2 + offsetY,
-          angle: (Math.atan2(dy, dx) * 180) / Math.PI,
-          text: `${Math.round(distance(start, end))} mm`,
-        });
+        lines.push(
+          projectDimension(
+            engine,
+            rect,
+            `${index}-${start.x}-${start.y}`,
+            start,
+            end,
+            `${Math.round(distance(start, end))} mm`,
+            18,
+          ),
+        );
+      }
+      if (state.mode === "builder" && building) {
+        for (const opening of building.openings) {
+          const wall = building.walls.find((item) => item.id === opening.wallId);
+          if (!wall) continue;
+          appendOpeningDimensions(
+            lines,
+            engine,
+            rect,
+            `opening-${opening.id}`,
+            wall,
+            opening.offset,
+            opening.width,
+            openingClearances(wall, building.openings, opening.offset, opening.width, opening.id),
+            `${opening.kind === "door" ? "Door" : "Window"} ${Math.round(opening.width)} mm`,
+          );
+        }
+        const hover = state.draft.hover;
+        if (hover && state.activeFloorId && (state.tool === "door" || state.tool === "window")) {
+          const preview = calculateOpeningPlacement(
+            building.walls,
+            building.openings,
+            state.activeFloorId,
+            hover,
+            state.tool === "door" ? 900 : 1200,
+          );
+          if (preview?.valid) {
+            appendOpeningDimensions(
+              lines,
+              engine,
+              rect,
+              "opening-preview",
+              preview.wall,
+              preview.offset,
+              preview.width,
+              preview.clearances,
+              `${state.tool === "door" ? "Door" : "Window"} ${preview.width} mm`,
+            );
+          }
+        }
       }
       const serialized = JSON.stringify(lines);
       if (serialized !== previous) {
@@ -632,7 +955,11 @@ export function SceneCanvas() {
   const lastDraftPoint = draft.points.at(-1);
 
   return (
-    <div className="scene-host" ref={hostRef}>
+    <div
+      className="scene-host"
+      data-view={mode === "builder" ? "top-locked" : "perspective"}
+      ref={hostRef}
+    >
       <svg className="dimension-overlay" aria-hidden="true">
         {dimensions.map((line) => {
           const dx = line.x2 - line.x1;

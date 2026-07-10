@@ -26,6 +26,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-018 | Windows CI, packaging, and release automation | Done for tagged releases | SK-016 | Green public Actions and release runs |
 | SK-019 | Public GitHub publication | Done | SK-018 | Public remote, clean main, green workflow |
 | SK-020 | Configurable canvas background colour | Done | SK-006, SK-007 | Settings persistence, viewport application, and contrast check |
+| SK-021 | Top-down Builder and assisted opening placement | Done for v0.1.3 | SK-008–SK-010 | Top-view, snapping, preview, clearance, and finalized-dimension smoke |
 
 ## Ticket details
 
@@ -160,6 +161,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **Implemented**
 
 - Grid and construction-axis snapping, closure snapping, 5° Shift+wheel offset, provisional geometry, direct numeric input, validation, area, perimeter, and automatic transition to wall work.
+- Builder uses a locked orthographic top view with no camera rotation; nearby vertices and edges take priority over axes and grid using an aggressive screen-scaled snap radius.
 - Projected SVG dimension lines, end stops, aligned millimetre labels, and Builder-only display.
 - Self-intersection, zero-length, too-few-points, and zero-area checks.
 
@@ -201,6 +203,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Door/window placement on the nearest wall with defaults, sill constraints, property editing, overlap validation, and actual wall void geometry made from non-overlapping wall pieces.
 - Straight-stair riser derivation, rendered steps, and stair clearance cut from the slab above.
 - Thick gable roof panels with pitch, overhang, thickness, ridge rotation, and flip controls; panel rotation now rises from each eave to the ridge rather than forming an inverted gable.
+- Door/window placement previews use a wide wall snap band, translucent opening box, validity colour, and left/right clearances to the nearest wall end or opening. Finalized openings keep those dimensions visible in Builder mode.
 
 **Todo / hardening**
 
@@ -360,6 +363,22 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Changing and saving the colour updates the active canvas immediately and remains selected after restart.
 - Grid lines remain visible against both a light and a dark user-selected colour.
+
+### SK-021 — Top-down Builder and assisted opening placement
+
+**Outcome:** Foundation, wall, door, and window creation stays precise and legible without fighting a perspective camera.
+
+**Completed**
+
+- Builder now uses a locked orthographic top-to-bottom view; panning and zoom remain available while camera rotation is disabled.
+- Foundation and wall snapping now prioritizes nearby vertices, then edges, then construction axes, then grid, with a screen-scaled aggressive radius.
+- Door/window tools preview the snapped opening with a transparent placement box, highlighted wall band, valid/invalid colour, and a generous 1200 mm snap zone.
+- Preview and finalized openings show left/right clearances to the closest wall end or adjacent opening, plus the opening width in the dimension overlay.
+- Unit tests cover placement, clearance, and overlap rejection; desktop smoke covers locked view, preview, commit, and final clearance dimensions.
+
+**Follow-up**
+
+- Add visible snap-target glyphs and configurable opening presets/clearance defaults.
 
 ## Release acceptance checklist
 

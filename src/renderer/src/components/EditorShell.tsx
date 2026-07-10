@@ -202,6 +202,8 @@ export function EditorShell({ onSettings }: Props) {
                 </>
               )}
               <div className="rail-note">
+                <strong>Locked top view</strong>
+                <br />
                 Shift + wheel
                 <br />
                 <strong>{draft.axisAngle}° axis offset</strong>
