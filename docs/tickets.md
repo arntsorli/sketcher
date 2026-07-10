@@ -330,7 +330,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Verification completed**
 
-- Public Windows CI and `v0.1.2` release workflows completed successfully.
+- Public Windows CI and `v0.1.3` release workflows completed successfully.
 - The release contains the NSIS setup executable, portable x64 executable, and SHA-256 checksum file.
 
 **Remaining hardening**
@@ -404,4 +404,4 @@ The following evidence is refreshed before each publication. Any failed command 
 | Desktop runtime | Home, editor, Builder direct input, sandbox boundary, and Manifold worker smoke pass |
 | Terrain runtime | Live Kartverket/Høydedata terrain smoke pass with a map-textured normalized mesh |
 | Windows distributions | NSIS setup, portable x64, and unpacked app build successfully; unpacked app smoke passes |
-| Public delivery | `main` CI and the `v0.1.2` release workflow pass; installer, portable build, and checksums are published |
+| Public delivery | `main` CI and the `v0.1.3` release workflow pass; installer, portable build, and checksums are published |
