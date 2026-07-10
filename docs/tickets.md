@@ -336,7 +336,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Verification completed**
 
-- Public Windows CI and `v0.1.3` release workflows completed successfully.
+- Public Windows CI and `v0.1.4` release workflows completed successfully.
 - The release contains the NSIS setup executable, portable x64 executable, and SHA-256 checksum file.
 
 **Remaining hardening**
@@ -352,7 +352,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Reviewed and committed only the Sketcher source tree; generated builds, smoke state, captures, and dependencies remain ignored.
 - Published the public `arntsorli/sketcher` repository with `main` as its default branch.
 - Added description and architecture, CAD, Electron, Three.js, TypeScript, and Windows topics.
-- Verified Windows CI and the public `v0.1.3` release workflow, release assets, and checksums.
+- Verified Windows CI and the public `v0.1.4` release workflow, release assets, and checksums.
 
 ### SK-020 — Configurable canvas background colour
 
@@ -426,4 +426,4 @@ The following evidence is refreshed before each publication. Any failed command 
 | Desktop runtime | Home, editor, Builder direct input, sandbox boundary, and Manifold worker smoke pass |
 | Terrain runtime | Live Kartverket/Høydedata terrain smoke pass with a map-textured normalized mesh |
 | Windows distributions | NSIS setup, portable x64, and unpacked app build successfully; unpacked app smoke passes |
-| Public delivery | `main` CI and the `v0.1.3` release workflow pass; installer, portable build, and checksums are published |
+| Public delivery | `main` CI and the `v0.1.4` release workflow pass; installer, portable build, and checksums are published |
