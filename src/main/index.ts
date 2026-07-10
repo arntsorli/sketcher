@@ -281,6 +281,21 @@ function registerIpc(): void {
   );
 
   ipcMain.handle(
+    "terrain:fetchImage",
+    trustedHandler(async (url: string) => {
+      const parsed = new URL(url);
+      const trustedHosts = new Set(["services.arcgisonline.com"]);
+      if (parsed.protocol !== "https:" || !trustedHosts.has(parsed.hostname)) {
+        throw new Error("Only the configured public map-image provider is allowed.");
+      }
+      const response = await net.fetch(parsed.toString());
+      if (!response.ok) throw new Error(`Map image request failed (${response.status}).`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      return Buffer.from(bytes).toString("base64");
+    }),
+  );
+
+  ipcMain.handle(
     "secrets:get",
     trustedHandler((key: string) => getSecret(key)),
   );

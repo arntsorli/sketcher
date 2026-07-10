@@ -10,6 +10,7 @@ export interface WallSolidRequest {
   thickness: number;
   height: number;
   alignment: "inside" | "center" | "outside";
+  insideSign?: 1 | -1;
   openings: WallSolidOpening[];
 }
 

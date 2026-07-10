@@ -124,13 +124,11 @@ try {
     const firstPlace = window.locator(".search-results button").first();
     await firstPlace.waitFor({ state: "visible", timeout: 15_000 });
     await firstPlace.click();
-    await window.getByLabel("Terrain detail").selectOption("17");
-    await window.getByRole("button", { name: "Add map + elevation" }).click();
+    await window.getByLabel("Area size").selectOption("250");
+    await window.getByLabel("Image style").selectOption("map");
+    await window.getByRole("button", { name: "Add flat map image" }).click();
     await window.locator(".terrain-dialog").waitFor({ state: "hidden", timeout: 60_000 });
-    await window
-      .getByText(/Kartverket/)
-      .first()
-      .waitFor({ state: "visible" });
+    await window.getByText(/^Map 59\./).waitFor({ state: "visible" });
     await window.screenshot({ path: path.join(artifacts, "terrain.png") });
   }
 

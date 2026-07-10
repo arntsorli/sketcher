@@ -35,6 +35,7 @@ npm run package
 ```
 
 Detailed delivery status and remaining work are tracked in [docs/tickets.md](docs/tickets.md). Product boundaries and workflows are in [docs/product-spec.md](docs/product-spec.md).
+The CC0-first policy for future bundled models and the current external-asset workflow are in [docs/asset-library.md](docs/asset-library.md).
 
 ## Project files
 

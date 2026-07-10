@@ -23,6 +23,7 @@ export type EditorTool =
   | "wall"
   | "door"
   | "window"
+  | "carport"
   | "stair"
   | "roof"
   | "place-building"
@@ -89,7 +90,7 @@ interface EditorState {
   removeLastFoundationPoint(): void;
   finishFoundation(): void;
   addWallSegment(start: Vec2, end: Vec2): void;
-  addOpening(kind: "door" | "window", point: Vec2): void;
+  addOpening(kind: "door" | "window" | "carport", point: Vec2): void;
   addStair(point: Vec2): void;
   addFloor(): void;
   addRoof(): void;
@@ -424,7 +425,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const building = selectedBuildingDefinition(state);
     const floorId = activeFloorId(state);
     if (!building || !floorId) return;
-    const width = kind === "door" ? 900 : 1200;
+    const width = kind === "carport" ? 3000 : kind === "door" ? 900 : 1200;
     const placement = calculateOpeningPlacement(
       building.walls,
       building.openings,
@@ -436,20 +437,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       set({ error: placement?.reason ?? "Choose a wall with enough clear length." });
       return;
     }
-    get().commit(`${kind === "door" ? "Door" : "Window"} added`, (project) => {
-      project.buildingDefinitions
-        .find((item) => item.id === building.id)
-        ?.openings.push({
-          id: crypto.randomUUID(),
-          floorId,
-          wallId: placement.wall.id,
-          kind,
-          width,
-          height: kind === "door" ? 2100 : 1200,
-          offset: placement.offset,
-          sillHeight: kind === "door" ? 0 : 900,
-        });
-    });
+    get().commit(
+      `${kind === "carport" ? "Carport opening" : kind === "door" ? "Door" : "Window"} added`,
+      (project) => {
+        project.buildingDefinitions
+          .find((item) => item.id === building.id)
+          ?.openings.push({
+            id: crypto.randomUUID(),
+            floorId,
+            wallId: placement.wall.id,
+            kind,
+            width,
+            height: kind === "carport" ? 2200 : kind === "door" ? 2100 : 1200,
+            offset: placement.offset,
+            sillHeight: kind === "window" ? 900 : 0,
+          });
+      },
+    );
   },
 
   addStair(point) {
@@ -500,9 +504,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     const building = selectedBuildingDefinition(state);
     if (!building || building.roof) return;
-    const elevation = building.floors
-      .filter((floor) => floor.type === "story")
-      .reduce((total, floor) => total + floor.height, 0);
+    const stories = building.floors.filter((floor) => floor.type === "story");
+    const finalStory = stories.at(-1);
+    const elevation = finalStory
+      ? finalStory.elevation + finalStory.slabThickness + finalStory.height
+      : 0;
     const floorId = crypto.randomUUID();
     get().commit("Gable roof added", (project) => {
       const target = project.buildingDefinitions.find((item) => item.id === building.id);
@@ -520,7 +526,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         pitchDegrees: 30,
         overhang: 300,
         thickness: 200,
-        ridgeRotationDegrees: 0,
+        ridgeRotationDegrees:
+          Math.max(...target.footprint.map((point) => point.x)) -
+            Math.min(...target.footprint.map((point) => point.x)) >=
+          Math.max(...target.footprint.map((point) => point.y)) -
+            Math.min(...target.footprint.map((point) => point.y))
+            ? 0
+            : 90,
         flipped: false,
       };
     });

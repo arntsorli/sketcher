@@ -8,6 +8,7 @@ import {
   lockToConstructionAxis,
   polygonAreaMm2,
   polygonPerimeterMm,
+  snapToGrid,
   validateNextPolygonPoint,
   validatePolygon,
 } from "./geometry";
@@ -57,6 +58,10 @@ describe("building geometry", () => {
   it("locks to rotated construction axes", () => {
     const result = lockToConstructionAxis({ x: 0, y: 0 }, { x: 900, y: 700 }, 5);
     expect(Math.atan2(result.y, result.x) * (180 / Math.PI)).toBeCloseTo(5);
+  });
+
+  it("snaps blank-canvas foundation points to the active grid", () => {
+    expect(snapToGrid({ x: 1049, y: -151 }, 100)).toEqual({ x: 1000, y: -200 });
   });
 
   it("classifies footprint walls and stair risers", () => {

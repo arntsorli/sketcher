@@ -27,6 +27,7 @@ const api: SketcherApi = {
   terrain: {
     search: (query) => ipcRenderer.invoke("terrain:search", query),
     fetchCapabilities: (url) => ipcRenderer.invoke("terrain:fetchCapabilities", url),
+    fetchImage: (url) => ipcRenderer.invoke("terrain:fetchImage", url),
     sampleElevation: (latitude, longitude, widthMeters, heightMeters, resolution) =>
       ipcRenderer.invoke(
         "terrain:sampleElevation",

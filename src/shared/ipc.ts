@@ -65,6 +65,7 @@ export interface SketcherApi {
   terrain: {
     search(query: string): Promise<PlaceSearchResult[]>;
     fetchCapabilities(url: string): Promise<string>;
+    fetchImage(url: string): Promise<string>;
     sampleElevation(
       latitude: number,
       longitude: number,

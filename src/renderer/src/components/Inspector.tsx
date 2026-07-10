@@ -566,7 +566,13 @@ function BuilderInspector({
               >
                 <span>{opening.kind === "door" ? "D" : "▣"}</span>
                 <div>
-                  <strong>{opening.kind === "door" ? "Door" : "Window"}</strong>
+                  <strong>
+                    {opening.kind === "carport"
+                      ? "Carport opening"
+                      : opening.kind === "door"
+                        ? "Door"
+                        : "Window"}
+                  </strong>
                   <small>
                     {opening.width} × {opening.height} mm
                   </small>
@@ -592,7 +598,12 @@ function BuilderInspector({
                   });
                 }}
               >
-                {selectedOpening.kind === "door" ? (
+                {selectedOpening.kind === "carport" ? (
+                  <>
+                    <option value="2500x2100">2500 Ã— 2100</option>
+                    <option value="3000x2200">3000 Ã— 2200</option>
+                  </>
+                ) : selectedOpening.kind === "door" ? (
                   <>
                     <option value="800x2100">800 × 2100</option>
                     <option value="900x2100">900 × 2100</option>
@@ -631,7 +642,7 @@ function BuilderInspector({
                 <input
                   type="number"
                   min={0}
-                  disabled={selectedOpening.kind === "door"}
+                  disabled={selectedOpening.kind !== "window"}
                   defaultValue={selectedOpening.sillHeight}
                   onBlur={(event) =>
                     commit("Opening sill changed", (document) => {

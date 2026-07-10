@@ -273,13 +273,16 @@ export function SceneCanvas() {
   const settings = useEditorStore((state) => state.settings);
   const activeBuilding = project?.buildingDefinitions.find((item) => item.id === activeBuildingId);
   const openingPreview =
-    activeBuilding && activeFloorId && draft.hover && (tool === "door" || tool === "window")
+    activeBuilding &&
+    activeFloorId &&
+    draft.hover &&
+    (tool === "door" || tool === "window" || tool === "carport")
       ? calculateOpeningPlacement(
           activeBuilding.walls,
           activeBuilding.openings,
           activeFloorId,
           draft.hover,
-          tool === "door" ? 900 : 1200,
+          tool === "carport" ? 3000 : tool === "door" ? 900 : 1200,
         )
       : null;
 
@@ -468,11 +471,24 @@ export function SceneCanvas() {
       engine.orbit.object = engine.builderCamera;
       engine.orbit.target.set((minX + maxX) / 2000, (minY + maxY) / 2000, 0);
       engine.orbit.enableRotate = false;
+      const gridMaterials = Array.isArray(engine.grid.material)
+        ? engine.grid.material
+        : [engine.grid.material];
+      gridMaterials.forEach((material, index) => {
+        material.opacity = index === 0 ? 0.9 : 0.68;
+        material.transparent = true;
+      });
     } else {
       engine.camera = engine.architectureCamera;
       engine.orbit.object = engine.architectureCamera;
       engine.orbit.enableRotate = true;
       engine.orbit.maxPolarAngle = Math.PI * 0.49;
+      const gridMaterials = Array.isArray(engine.grid.material)
+        ? engine.grid.material
+        : [engine.grid.material];
+      gridMaterials.forEach((material) => {
+        material.opacity = 0.55;
+      });
     }
     engine.renderPass.camera = engine.camera;
     engine.outline.renderCamera = engine.camera;
@@ -622,12 +638,30 @@ export function SceneCanvas() {
     if (draft.wallStart) points.push(draft.wallStart);
     if (draft.hover && (draft.points.length > 0 || draft.wallStart)) points.push(draft.hover);
     if (points.length > 0) {
+      if (tool === "foundation" && points.length >= 3) {
+        const shape = new THREE.Shape(
+          points.map((point) => new THREE.Vector2(point.x / 1000, point.y / 1000)),
+        );
+        const fill = new THREE.Mesh(
+          new THREE.ShapeGeometry(shape),
+          new THREE.MeshBasicMaterial({
+            color: 0x179bd1,
+            transparent: true,
+            opacity: 0.22,
+            depthTest: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        fill.position.z = 0.012;
+        fill.renderOrder = 997;
+        engine.draft.add(fill);
+      }
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map((point) => new THREE.Vector3(point.x / 1000, point.y / 1000, 0.015)),
       );
       const line = new THREE.Line(
         geometry,
-        new THREE.LineBasicMaterial({ color: 0x50c4ff, depthTest: false }),
+        new THREE.LineBasicMaterial({ color: 0x007db8, depthTest: false }),
       );
       line.renderOrder = 999;
       engine.draft.add(line);
@@ -650,6 +684,30 @@ export function SceneCanvas() {
         marker.renderOrder = 1000;
         engine.draft.add(marker);
       }
+      if (tool === "foundation" && draft.hover) {
+        const gridTarget = new THREE.Mesh(
+          new THREE.RingGeometry(0.07, 0.1, 4),
+          new THREE.MeshBasicMaterial({
+            color: 0xf7a735,
+            depthTest: false,
+            side: THREE.DoubleSide,
+          }),
+        );
+        gridTarget.position.set(draft.hover.x / 1000, draft.hover.y / 1000, 0.025);
+        gridTarget.rotation.z = Math.PI / 4;
+        gridTarget.renderOrder = 1001;
+        engine.draft.add(gridTarget);
+      }
+    }
+    if (tool === "foundation" && draft.hover && points.length === 0) {
+      const gridTarget = new THREE.Mesh(
+        new THREE.RingGeometry(0.07, 0.1, 4),
+        new THREE.MeshBasicMaterial({ color: 0xf7a735, depthTest: false, side: THREE.DoubleSide }),
+      );
+      gridTarget.position.set(draft.hover.x / 1000, draft.hover.y / 1000, 0.025);
+      gridTarget.rotation.z = Math.PI / 4;
+      gridTarget.renderOrder = 1001;
+      engine.draft.add(gridTarget);
     }
     if (openingPreview) {
       const { wall } = openingPreview;
@@ -721,7 +779,10 @@ export function SceneCanvas() {
       }
       const rawPoint = { x: hit.x * 1000, y: hit.y * 1000 };
       const current = useEditorStore.getState();
-      if (current.mode === "builder" && (current.tool === "door" || current.tool === "window")) {
+      if (
+        current.mode === "builder" &&
+        (current.tool === "door" || current.tool === "window" || current.tool === "carport")
+      ) {
         return rawPoint;
       }
       const aggressiveSnap = aggressiveBuilderSnap(
@@ -747,7 +808,7 @@ export function SceneCanvas() {
       if (
         point &&
         mode === "builder" &&
-        ["foundation", "wall", "door", "window", "stair"].includes(tool)
+        ["foundation", "wall", "door", "window", "carport", "stair"].includes(tool)
       ) {
         setDraft({ hover: point });
       }
@@ -762,8 +823,9 @@ export function SceneCanvas() {
         else if (tool === "wall") {
           if (draft.wallStart) addWallSegment(draft.wallStart, point);
           else setDraft({ wallStart: point });
-        } else if (tool === "door" || tool === "window") addOpening(tool, point);
-        else if (tool === "stair") addStair(point);
+        } else if (tool === "door" || tool === "window" || tool === "carport") {
+          addOpening(tool, point);
+        } else if (tool === "stair") addStair(point);
         else if (tool === "select") {
           engine.raycaster.setFromCamera(engine.pointer, engine.camera);
           const intersections = engine.raycaster.intersectObjects(engine.content.children, true);
@@ -936,17 +998,21 @@ export function SceneCanvas() {
             opening.offset,
             opening.width,
             openingClearances(wall, building.openings, opening.offset, opening.width, opening.id),
-            `${opening.kind === "door" ? "Door" : "Window"} ${Math.round(opening.width)} mm`,
+            `${opening.kind === "carport" ? "Carport" : opening.kind === "door" ? "Door" : "Window"} ${Math.round(opening.width)} mm`,
           );
         }
         const hover = state.draft.hover;
-        if (hover && state.activeFloorId && (state.tool === "door" || state.tool === "window")) {
+        if (
+          hover &&
+          state.activeFloorId &&
+          (state.tool === "door" || state.tool === "window" || state.tool === "carport")
+        ) {
           const preview = calculateOpeningPlacement(
             building.walls,
             building.openings,
             state.activeFloorId,
             hover,
-            state.tool === "door" ? 900 : 1200,
+            state.tool === "carport" ? 3000 : state.tool === "door" ? 900 : 1200,
           );
           if (preview?.valid) {
             appendOpeningDimensions(
@@ -958,7 +1024,7 @@ export function SceneCanvas() {
               preview.offset,
               preview.width,
               preview.clearances,
-              `${state.tool === "door" ? "Door" : "Window"} ${preview.width} mm`,
+              `${state.tool === "carport" ? "Carport" : state.tool === "door" ? "Door" : "Window"} ${preview.width} mm`,
             );
           }
         }

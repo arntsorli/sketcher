@@ -28,6 +28,12 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-020 | Configurable canvas background colour | Done | SK-006, SK-007 | Settings persistence, viewport application, and contrast check |
 | SK-021 | Top-down Builder and assisted opening placement | Done for v0.1.3 | SK-008–SK-010 | Top-view, snapping, preview, clearance, and finalized-dimension smoke |
 | SK-022 | Foundation robustness and E2E automation | In progress | SK-003, SK-008, SK-016 | Direct-input save/reopen E2E plus broader workflow coverage |
+| SK-023 | Foundation legibility and grid snap | In progress | SK-008 | Visual and direct-input grid-snap smoke |
+| SK-024 | Envelope alignment and roof closure | In progress | SK-009, SK-010 | Exterior-face, eave, and wall-to-roof geometry tests |
+| SK-025 | Flat map-image layer MVP | In progress | SK-014 | Add/reopen map-image layer without elevation service |
+| SK-026 | Expanded site-object library | In progress | SK-013 | Procedural asset placement and persistence smoke |
+| SK-027 | Carport and garage openings | In progress | SK-010 | Opening preview, clearance, persistence, and wall-void tests |
+| SK-028 | Redistributable asset-pack policy | Todo | SK-013, SK-026 | License review and import workflow documentation |
 
 ## Ticket details
 
@@ -401,6 +407,67 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Add E2E journeys for multi-room walls, doors/windows, stairs, roof persistence, shared-instance propagation, asset GLB interchange, delete/recovery, terrain offline reopening, and corrupt-file/error handling.
 - Add visual assertions for snap glyphs, dimension readability, screen scaling, and selected-object outlines.
+
+### SK-023 — Foundation legibility and grid snap
+
+**Outcome:** A foundation stays unmistakable against a light or dark canvas, and every blank-canvas click has an obvious, dependable grid target.
+
+**In progress**
+
+- Increased the Builder grid opacity and added a high-contrast translucent foundation fill, dark draft edge, and orange current snap glyph.
+- Grid remains the fallback after explicit vertex, edge, and construction-axis targets; blank-canvas points snap to the configured grid.
+- Unit coverage verifies grid rounding; visual/screen-scaling assertions remain open.
+
+### SK-024 — Envelope alignment and roof closure
+
+**Outcome:** The exterior face of an outer wall lies on the foundation boundary, and the roof fully encloses the final storey without daylight gaps.
+
+**In progress**
+
+- Corrected automatic external-wall alignment for both clockwise and counter-clockwise footprints so the wall solid grows toward the interior.
+- Roof elevation now starts at the final wall top, and the default gable is a closed, triangulated footprint volume with roof-edge infill rather than separate bounded panels.
+- Geometry unit tests cover both footprint windings and an L-shaped roof's enclosing bounds.
+- Remaining: explicit ridge-edge selection, an exact offset algorithm for concave overhangs, and visual coverage for rotated foundations.
+
+### SK-025 — Flat map-image layer MVP
+
+**Outcome:** A selected Norwegian map area can be added as a cached, flat Z=0 image plane even when elevation/LiDAR services are unavailable.
+
+**In progress**
+
+- Keep the MapLibre selector mounted while coordinates and AOI settings change.
+- Offer cached Esri topographic-map and satellite-image choices, fetched through a narrow Electron IPC allow-list rather than a CORS-sensitive canvas capture.
+- Add the image plane immediately at Z=0 with source bounds, attribution, and embedded project archive data. The live smoke now verifies the flat-map creation path.
+- Remaining: offline-restart E2E, AOI drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and high-resolution orthophoto remain follow-on work rather than prerequisites.
+
+### SK-026 — Expanded site-object library
+
+**Outcome:** Site composition includes practical, redistributable procedural garden and utility objects.
+
+**In progress**
+
+- Added scalable hedge and fence segments, a garbage shed, flag pole, and birch tree alongside the existing car, trees, person, and box.
+- Definitions remain project-level built-ins and reuse the existing instanced-placement flow.
+- Remaining: place/persist each new type in E2E and add material/LOD variants.
+
+### SK-027 — Carport and garage openings
+
+**Outcome:** A garage/carport opening uses the same clear placement preview and real wall void as doors and windows, at suitable vehicle dimensions.
+
+**In progress**
+
+- Added a Carport Builder tool with a 3,000×2,200 mm default plus 2,500×2,100 and 3,000×2,200 mm presets in Properties.
+- It reuses the wide wall snapping, translucent preview, clearance dimensions, invalid-placement handling, property editing, and Boolean wall-opening path.
+- Schema coverage persists the new opening type; add a dedicated desktop placement/persistence E2E next.
+
+### SK-028 — Redistributable asset-pack policy
+
+**Outcome:** Optional external trees, cars, and garden items can be sourced without accidentally redistributing incompatible models.
+
+**Todo**
+
+- Document a CC0-first asset policy, retain attribution/license metadata for any bundled non-CC0 item, and keep user-imported assets separate.
+- Evaluate curated sources and only bundle models when their licence permits redistribution in the Windows package.
 
 ## Release acceptance checklist
 

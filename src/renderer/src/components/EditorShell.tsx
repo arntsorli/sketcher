@@ -195,6 +195,7 @@ export function EditorShell({ onSettings }: Props) {
                   <ToolButton tool="wall" label="Wall" hint="Click start + end" />
                   <ToolButton tool="door" label="Door" hint="900 × 2100" />
                   <ToolButton tool="window" label="Window" hint="1200 × 1200" />
+                  <ToolButton tool="carport" label="Carport" hint="3000 mm garage opening" />
                   <ToolButton tool="stair" label="Stair" hint="Straight flight" />
                   <button
                     className="tool-button"

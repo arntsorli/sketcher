@@ -24,12 +24,17 @@ async function createWall(id: string, payload: WallSolidRequest): Promise<void> 
     send({ type: "cancelled", id });
     return;
   }
+  const insideSign = payload.insideSign ?? 1;
   const yOffset =
     payload.alignment === "inside"
-      ? 0
+      ? insideSign > 0
+        ? 0
+        : -payload.thickness
       : payload.alignment === "center"
         ? -payload.thickness / 2
-        : -payload.thickness;
+        : insideSign > 0
+          ? -payload.thickness
+          : 0;
   let solid = module.Manifold.cube([payload.length, payload.thickness, payload.height]).translate([
     0,
     yOffset,

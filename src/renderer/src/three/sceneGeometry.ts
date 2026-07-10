@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { gablePanelRotation } from "../../../shared/geometry";
 import type {
   AssetDefinition,
   BuildingDefinition,
@@ -72,9 +71,36 @@ function shapeFromFootprint(building: BuildingDefinition, floorIndex = 0): THREE
   return shape;
 }
 
+function footprintInsideSign(wall: Wall, footprint: BuildingDefinition["footprint"]): 1 | -1 {
+  const midpoint = { x: (wall.start.x + wall.end.x) / 2, y: (wall.start.y + wall.end.y) / 2 };
+  const dx = wall.end.x - wall.start.x;
+  const dy = wall.end.y - wall.start.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const probe = Math.max(10, wall.thickness / 4);
+  const left = { x: midpoint.x + (-dy / length) * probe, y: midpoint.y + (dx / length) * probe };
+  let inside = false;
+  for (
+    let index = 0, previous = footprint.length - 1;
+    index < footprint.length;
+    previous = index++
+  ) {
+    const current = footprint[index];
+    const prior = footprint[previous];
+    if (!current || !prior) continue;
+    if (
+      current.y > left.y !== prior.y > left.y &&
+      left.x < ((prior.x - current.x) * (left.y - current.y)) / (prior.y - current.y) + current.x
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside ? 1 : -1;
+}
+
 function boxPiece(
   group: THREE.Group,
   wall: Wall,
+  insideSign: 1 | -1,
   startAlong: number,
   width: number,
   baseHeight: number,
@@ -93,9 +119,9 @@ function boxPiece(
   );
   const yOffset =
     wall.alignment === "inside"
-      ? wall.thickness / 2
+      ? (insideSign * wall.thickness) / 2
       : wall.alignment === "outside"
-        ? -wall.thickness / 2
+        ? (-insideSign * wall.thickness) / 2
         : 0;
   mesh.position.set(centerAlong * MM_TO_M, yOffset * MM_TO_M, (baseHeight + height / 2) * MM_TO_M);
   mesh.castShadow = true;
@@ -105,12 +131,14 @@ function boxPiece(
 
 function wallWithOpenings(
   group: THREE.Group,
+  footprint: BuildingDefinition["footprint"],
   wall: Wall,
   openings: Opening[],
   floorElevation: number,
   floorHeight: number,
 ): void {
   const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+  const insideSign = wall.type === "external" ? footprintInsideSign(wall, footprint) : 1;
   const sorted = openings
     .filter((opening) => opening.wallId === wall.id)
     .sort((left, right) => left.offset - right.offset);
@@ -122,6 +150,7 @@ function wallWithOpenings(
     thickness: wall.thickness,
     height: floorHeight,
     alignment: wall.alignment,
+    insideSign,
     openings: sorted.map((opening) => ({
       offset: opening.offset,
       width: opening.width,
@@ -138,13 +167,13 @@ function wallWithOpenings(
   group.add(wallGroup);
   let cursor = 0;
   for (const opening of sorted) {
-    boxPiece(wallGroup, wall, cursor, opening.offset - cursor, 0, floorHeight);
-    boxPiece(wallGroup, wall, opening.offset, opening.width, 0, opening.sillHeight);
+    boxPiece(wallGroup, wall, insideSign, cursor, opening.offset - cursor, 0, floorHeight);
+    boxPiece(wallGroup, wall, insideSign, opening.offset, opening.width, 0, opening.sillHeight);
     const top = opening.sillHeight + opening.height;
-    boxPiece(wallGroup, wall, opening.offset, opening.width, top, floorHeight - top);
+    boxPiece(wallGroup, wall, insideSign, opening.offset, opening.width, top, floorHeight - top);
     cursor = Math.max(cursor, opening.offset + opening.width);
   }
-  boxPiece(wallGroup, wall, cursor, length - cursor, 0, floorHeight);
+  boxPiece(wallGroup, wall, insideSign, cursor, length - cursor, 0, floorHeight);
 }
 
 function addRoof(group: THREE.Group, building: BuildingDefinition): void {
@@ -153,51 +182,70 @@ function addRoof(group: THREE.Group, building: BuildingDefinition): void {
   if (!roof || !roofFloor) return;
   const xs = building.footprint.map((point) => point.x);
   const ys = building.footprint.map((point) => point.y);
-  const minX = Math.min(...xs) - roof.overhang;
-  const maxX = Math.max(...xs) + roof.overhang;
-  const minY = Math.min(...ys) - roof.overhang;
-  const maxY = Math.max(...ys) + roof.overhang;
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
   const ridgeAlongX = Math.abs(roof.ridgeRotationDegrees % 180) < 45;
   const run = (ridgeAlongX ? maxY - minY : maxX - minX) / 2;
   const rise = Math.tan((roof.pitchDegrees * Math.PI) / 180) * run;
   const baseZ = roofFloor.elevation;
-  const slopeLength = Math.hypot(run, rise);
-  const pitch = (roof.pitchDegrees * Math.PI) / 180;
-  for (const side of [-1, 1]) {
-    const geometry = ridgeAlongX
-      ? new THREE.BoxGeometry(
-          (maxX - minX) * MM_TO_M,
-          slopeLength * MM_TO_M,
-          roof.thickness * MM_TO_M,
-        )
-      : new THREE.BoxGeometry(
-          slopeLength * MM_TO_M,
-          (maxY - minY) * MM_TO_M,
-          roof.thickness * MM_TO_M,
-        );
-    const mesh = new THREE.Mesh(geometry, materials.roof);
-    if (ridgeAlongX) {
-      mesh.position.set(
-        ((minX + maxX) / 2) * MM_TO_M,
-        ((minY + maxY) / 2 + (side * run) / 2) * MM_TO_M,
-        (baseZ + rise / 2) * MM_TO_M,
-      );
-      const rotation = gablePanelRotation(side as -1 | 1, true, pitch);
-      mesh.rotation.x = rotation.x;
-    } else {
-      mesh.position.set(
-        ((minX + maxX) / 2 + (side * run) / 2) * MM_TO_M,
-        ((minY + maxY) / 2) * MM_TO_M,
-        (baseZ + rise / 2) * MM_TO_M,
-      );
-      const rotation = gablePanelRotation(side as -1 | 1, false, pitch);
-      mesh.rotation.y = rotation.y;
-    }
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.userData = { entityType: "roof", entityId: roof.floorId };
-    group.add(mesh);
+  const centroid = building.footprint.reduce(
+    (sum, point) => ({
+      x: sum.x + point.x / building.footprint.length,
+      y: sum.y + point.y / building.footprint.length,
+    }),
+    { x: 0, y: 0 },
+  );
+  const expand = Math.max(0, roof.overhang);
+  const footprint = building.footprint.map((point) => {
+    const dx = point.x - centroid.x;
+    const dy = point.y - centroid.y;
+    const length = Math.hypot(dx, dy) || 1;
+    return { x: point.x + (dx / length) * expand, y: point.y + (dy / length) * expand };
+  });
+  const shape = new THREE.Shape(
+    footprint.map((point) => new THREE.Vector2(point.x * MM_TO_M, point.y * MM_TO_M)),
+  );
+  const triangles = THREE.ShapeUtils.triangulateShape(shape.getPoints(), []);
+  const topHeight = (point: { x: number; y: number }) => {
+    const distanceFromRidge = ridgeAlongX
+      ? Math.abs(point.y - (minY + maxY) / 2)
+      : Math.abs(point.x - (minX + maxX) / 2);
+    return (
+      baseZ + Math.max(0, rise - Math.tan((roof.pitchDegrees * Math.PI) / 180) * distanceFromRidge)
+    );
+  };
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (const point of footprint) {
+    positions.push(point.x * MM_TO_M, point.y * MM_TO_M, topHeight(point) * MM_TO_M);
   }
+  for (const point of footprint) {
+    positions.push(point.x * MM_TO_M, point.y * MM_TO_M, (baseZ - roof.thickness) * MM_TO_M);
+  }
+  const count = footprint.length;
+  for (const triangle of triangles) {
+    indices.push(triangle[0] ?? 0, triangle[1] ?? 0, triangle[2] ?? 0);
+    indices.push(
+      (triangle[2] ?? 0) + count,
+      (triangle[1] ?? 0) + count,
+      (triangle[0] ?? 0) + count,
+    );
+  }
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count;
+    indices.push(index, next, index + count, next, next + count, index + count);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const mesh = new THREE.Mesh(geometry, materials.roof);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData = { entityType: "roof", entityId: roof.floorId };
+  group.add(mesh);
 }
 
 export function createBuildingGroup(building: BuildingDefinition): THREE.Group {
@@ -220,6 +268,7 @@ export function createBuildingGroup(building: BuildingDefinition): THREE.Group {
     for (const wall of building.walls.filter((item) => item.floorId === floor.id)) {
       wallWithOpenings(
         group,
+        building.footprint,
         wall,
         building.openings,
         floor.elevation + floor.slabThickness,
@@ -280,6 +329,44 @@ export function createBuiltinAsset(definition: AssetDefinition): THREE.Group {
     crown.rotation.x = Math.PI / 2;
     crown.position.z = 3.4;
     group.add(stem, crown);
+  } else if (definition.kind === "birch-tree") {
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.2, 5.5, 10), material(0xdfdfd5));
+    stem.position.z = 2.75;
+    const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(1.7, 1), material(0x6d9251));
+    crown.position.z = 5.7;
+    group.add(stem, crown);
+  } else if (definition.kind === "hedge-segment") {
+    const hedge = new THREE.Mesh(new THREE.BoxGeometry(3, 0.55, 1.65), green);
+    hedge.position.z = 0.825;
+    const top = new THREE.Mesh(new THREE.CapsuleGeometry(0.275, 2.45, 4, 10), darkGreen);
+    top.rotation.z = Math.PI / 2;
+    top.position.z = 1.5;
+    group.add(hedge, top);
+  } else if (definition.kind === "fence-segment") {
+    const railMaterial = material(0x826449);
+    for (const x of [-1.5, -0.75, 0, 0.75, 1.5]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 1.2), railMaterial);
+      post.position.set(x, 0, 0.6);
+      group.add(post);
+    }
+    for (const z of [0.35, 0.9]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.08, 0.08), railMaterial);
+      rail.position.z = z;
+      group.add(rail);
+    }
+  } else if (definition.kind === "garbage-shed") {
+    const shed = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.5, 1.8), material(0x65766e));
+    shed.position.z = 0.9;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.8, 0.16), material(0x394149));
+    roof.position.z = 1.86;
+    group.add(shed, roof);
+  } else if (definition.kind === "flag-pole") {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.075, 7, 12), material(0xc9d0d4));
+    pole.position.z = 3.5;
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), material(0xc9444a));
+    flag.position.set(0.72, 0, 6.35);
+    flag.rotation.x = Math.PI / 2;
+    group.add(pole, flag);
   } else if (definition.kind === "person") {
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 1.1, 6, 12), material(0x626d8c));
     body.rotation.x = Math.PI / 2;

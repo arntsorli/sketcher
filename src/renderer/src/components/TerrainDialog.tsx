@@ -13,6 +13,7 @@ interface Props {
 const CAPABILITIES_URL = "https://cache.kartverket.no/v1/wmts/1.0.0/WMTSCapabilities.xml";
 const FALLBACK_TILE =
   "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png";
+const ESRI_EXPORT_ROOT = "https://services.arcgisonline.com/ArcGIS/rest/services";
 
 function boundsAround(latitude: number, longitude: number, sizeMeters: number) {
   const halfLatitude = sizeMeters / 2 / 111_320;
@@ -42,6 +43,17 @@ function discoverTopoTemplate(xml: string): string {
     .replace("{TileCol}", "{x}");
 }
 
+function staticMapImageUrl(
+  bounds: { west: number; south: number; east: number; north: number },
+  imagery: "map" | "satellite",
+): string {
+  const service = imagery === "satellite" ? "World_Imagery" : "World_Topo_Map";
+  const bbox = [bounds.west, bounds.south, bounds.east, bounds.north]
+    .map((value) => value.toFixed(7))
+    .join(",");
+  return `${ESRI_EXPORT_ROOT}/${service}/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=1024,1024&format=png32&transparent=false&f=image`;
+}
+
 export function TerrainDialog({ open, onOpenChange }: Props) {
   const mapHostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -55,6 +67,8 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
   const [longitude, setLongitude] = useState(10.7522);
   const [sizeMeters, setSizeMeters] = useState(500);
   const [resolution, setResolution] = useState(33);
+  const [layerMode, setLayerMode] = useState<"flat-map" | "elevation">("flat-map");
+  const [imageryMode, setImageryMode] = useState<"map" | "satellite">("satellite");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -73,7 +87,7 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
     if (!open || !mapHostRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: mapHostRef.current,
-      center: [longitude, latitude],
+      center: [10.7522, 59.9139],
       zoom: 14,
       canvasContextAttributes: { preserveDrawingBuffer: true },
       attributionControl: { compact: true },
@@ -118,7 +132,7 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
       map.remove();
       mapRef.current = null;
     };
-  }, [open, tileTemplate, latitude, longitude]);
+  }, [open, tileTemplate]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -205,6 +219,47 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
         visible: true,
       };
       addTerrain(layer, undefined, imageryBase64);
+      onOpenChange(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addFlatMap = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const bounds = boundsAround(latitude, longitude, sizeMeters);
+      const imageryBase64 = await window.sketcher.terrain.fetchImage(
+        staticMapImageUrl(bounds, imageryMode),
+      );
+      const id = crypto.randomUUID();
+      addTerrain(
+        {
+          id,
+          name: `${imageryMode === "satellite" ? "Satellite" : "Map"} ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+          provider: "custom",
+          attribution:
+            imageryMode === "satellite"
+              ? "Esri, Maxar, Earthstar Geographics and the GIS User Community"
+              : "Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors, and the GIS User Community",
+          boundsWgs84: [bounds.west, bounds.south, bounds.east, bounds.north],
+          sourceEpsg: "EPSG:4326",
+          anchorWgs84: [longitude, latitude],
+          absoluteAnchorElevation: 0,
+          verticalOffset: 0,
+          widthMm: sizeMeters * 1000,
+          heightMm: sizeMeters * 1000,
+          imageryArchivePath: `${id}-${imageryMode}.png`,
+          gridSize: [2, 2],
+          elevationsMm: [0, 0, 0, 0],
+          visible: true,
+        },
+        undefined,
+        imageryBase64,
+      );
       onOpenChange(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -301,6 +356,28 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
                   <option value={65}>High · 65×65</option>
                 </select>
               </label>
+              <label>
+                Layer type
+                <select
+                  value={layerMode}
+                  onChange={(event) => setLayerMode(event.target.value as "flat-map" | "elevation")}
+                >
+                  <option value="flat-map">Flat cached map image (MVP)</option>
+                  <option value="elevation">Map + sampled elevation</option>
+                </select>
+              </label>
+              {layerMode === "flat-map" && (
+                <label>
+                  Image style
+                  <select
+                    value={imageryMode}
+                    onChange={(event) => setImageryMode(event.target.value as "map" | "satellite")}
+                  >
+                    <option value="satellite">Satellite image</option>
+                    <option value="map">Topographic map</option>
+                  </select>
+                </label>
+              )}
               <div className="provider-card">
                 <span className="status-dot" />
                 <div>
@@ -315,7 +392,10 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
               <button
                 className="button primary wide"
                 disabled={busy}
-                onClick={() => void addOnlineTerrain()}
+                aria-label={
+                  layerMode === "flat-map" ? "Add flat map image" : "Add map and elevation"
+                }
+                onClick={() => void (layerMode === "flat-map" ? addFlatMap() : addOnlineTerrain())}
               >
                 {busy ? "Sampling elevation…" : "Add map + elevation"}
               </button>
