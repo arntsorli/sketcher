@@ -25,6 +25,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-017 | Documentation and operator guidance | In progress | All feature tickets | Workflow illustrations and user guide |
 | SK-018 | Windows CI, packaging, and release automation | Done for v0.1.1 | SK-016 | Green public Actions and release runs |
 | SK-019 | Public GitHub publication | Done | SK-018 | Public remote, clean main, green workflow |
+| SK-020 | Configurable canvas background colour | Done | SK-006, SK-007 | Settings persistence, viewport application, and contrast check |
 
 ## Ticket details
 
@@ -125,13 +126,13 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Serializable snapshot command history with 100-step undo/redo.
 - Dirty tracking, manual save, recovery scheduling, mode/tool/selection state, and keyboard shortcuts.
-- Global project path, autosave, area, grid, snap, theme, graphics, navigation, cache, provider token, version, and license UI.
+- Global project path, autosave, area, grid, snap, theme, graphics, canvas background colour, navigation, cache, provider token, version, and license UI.
 - Secrets use Electron `safeStorage` and remain outside projects.
 
 **Todo**
 
 - Coalesce repeated numeric/property changes and continuous transforms into one history command.
-- Apply theme, graphics quality, invert zoom, and global grid defaults live.
+- Apply theme, graphics quality, invert zoom, and global grid defaults live. Canvas background colour already applies live with contrasting grid colours.
 - Add dirty-close failure handling rather than returning home if Save fails.
 
 ### SK-007 — Three.js viewport, navigation, selection, and transforms
@@ -143,6 +144,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Perspective camera, Z-up orbit controls, XY grid at Z=0, lighting, shadows, fog, resize handling, and metre-scaled rendering.
 - Scene/domain rebuild adapter, ray picking, whole-building grouping, outline pass, transform gizmos, rotation snapping, focus shortcut, and export root.
 - Keyboard transform modes: G translate, R rotate, S object scale, F focus.
+- Configurable canvas background with automatic grid contrast for light and dark custom colours.
 
 **Todo / hardening**
 
@@ -196,14 +198,9 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Implemented**
 
-- Door/window placement on the nearest wall with defaults, sill constraints, and actual wall void geometry made from non-overlapping wall pieces.
-- Straight stair riser derivation, procedural steps, roof-as-final-floor logic, gable pitch/overhang/thickness data, and removable final roof.
-
-**Implemented**
-
-- Door/window preset and property editing with overlap validation.
+- Door/window placement on the nearest wall with defaults, sill constraints, property editing, overlap validation, and actual wall void geometry made from non-overlapping wall pieces.
 - Straight-stair riser derivation, rendered steps, and stair clearance cut from the slab above.
-- Thick gable roof panels with pitch, overhang, thickness, ridge rotation, and flip controls.
+- Thick gable roof panels with pitch, overhang, thickness, ridge rotation, and flip controls; panel rotation now rises from each eave to the ridge rather than forming an inverted gable.
 
 **Todo / hardening**
 
@@ -347,6 +344,22 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Published the public `arntsorli/sketcher` repository with `main` as its default branch.
 - Added description and architecture, CAD, Electron, Three.js, TypeScript, and Windows topics.
 - Verified Windows CI and the public `v0.1.1` release workflow, release assets, and checksums.
+
+### SK-020 — Configurable canvas background colour
+
+**Outcome:** The 3D canvas remains comfortable to inspect in rooms, on bright displays, and with different model materials.
+
+**Completed**
+
+- Added a native colour picker to Global Settings for the canvas background.
+- Persisted the six-digit hex colour in application settings, with a light neutral default.
+- Applied the setting live to the Three.js background, fog, and renderer clear colour.
+- Adjusted grid colours automatically to preserve contrast for both light and dark custom backgrounds.
+
+**Acceptance**
+
+- Changing and saving the colour updates the active canvas immediately and remains selected after restart.
+- Grid lines remain visible against both a light and a dark user-selected colour.
 
 ## Release acceptance checklist
 

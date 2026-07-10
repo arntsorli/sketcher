@@ -48,6 +48,19 @@ try {
   await window.waitForTimeout(1200);
   await window.screenshot({ path: path.join(artifacts, "editor.png") });
 
+  await window.getByRole("button", { name: "Settings" }).click();
+  const backgroundInput = window.getByLabel("Canvas background colour");
+  await backgroundInput.fill("#e7f1f8");
+  await window.getByRole("button", { name: "Save settings" }).click();
+  await window.locator(".settings-dialog").waitFor({ state: "hidden" });
+  const savedBackground = await window.evaluate(async () => {
+    const settings = await window.sketcher.settings.get();
+    return settings.backgroundColor;
+  });
+  if (savedBackground !== "#e7f1f8") {
+    throw new Error(`Canvas background setting was not persisted: ${savedBackground}`);
+  }
+
   await window.getByRole("button", { name: "New building" }).click();
   await window.getByText("Draw the foundation").waitFor({ state: "visible" });
   const canvas = window.locator(".scene-host canvas");
@@ -83,6 +96,9 @@ try {
   if (rendererMessages.some((message) => message.includes("Manifold wall generation failed"))) {
     throw new Error("Manifold worker fell back during the smoke journey.");
   }
+  await window.getByRole("button", { name: "+ Gable roof" }).click();
+  await window.getByText("Gable properties").waitFor({ state: "visible" });
+  await window.screenshot({ path: path.join(artifacts, "gable-roof.png") });
 
   if (process.env.SKETCHER_LIVE_TERRAIN === "1") {
     await window.getByRole("button", { name: "Architecture" }).click();

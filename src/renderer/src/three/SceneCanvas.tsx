@@ -55,22 +55,43 @@ function entityRoot(object: THREE.Object3D | null): { type?: string; id?: string
   return {};
 }
 
+const DEFAULT_CANVAS_BACKGROUND = "#dfe7ee";
+
+type SceneEngine = {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  renderer: THREE.WebGLRenderer;
+  composer: EffectComposer;
+  outline: OutlinePass;
+  orbit: OrbitControls;
+  transform: TransformControls;
+  grid: THREE.GridHelper;
+  content: THREE.Group;
+  draft: THREE.Group;
+  raycaster: THREE.Raycaster;
+  pointer: THREE.Vector2;
+};
+
+function applyCanvasAppearance(engine: SceneEngine, backgroundColor: string): void {
+  const background = new THREE.Color(backgroundColor);
+  engine.scene.background = background;
+  if (engine.scene.fog) engine.scene.fog.color.copy(background);
+  engine.renderer.setClearColor(background);
+  const luminance = background.r * 0.2126 + background.g * 0.7152 + background.b * 0.0722;
+  const isLight = luminance > 0.45;
+  const colors = isLight ? [0x536675, 0xa4b2bc] : [0x7890a2, 0x2d3b46];
+  const materials = Array.isArray(engine.grid.material)
+    ? engine.grid.material
+    : [engine.grid.material];
+  materials.forEach((material, index) => {
+    material.color.setHex(colors[index] ?? colors[1] ?? 0xa4b2bc);
+  });
+}
+
 export function SceneCanvas() {
   const hostRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const engineRef = useRef<{
-    scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
-    renderer: THREE.WebGLRenderer;
-    composer: EffectComposer;
-    outline: OutlinePass;
-    orbit: OrbitControls;
-    transform: TransformControls;
-    content: THREE.Group;
-    draft: THREE.Group;
-    raycaster: THREE.Raycaster;
-    pointer: THREE.Vector2;
-  } | null>(null);
+  const engineRef = useRef<SceneEngine | null>(null);
   const [dimensions, setDimensions] = useState<DimensionLine[]>([]);
   const [inputPosition, setInputPosition] = useState({ x: 0, y: 0, visible: false });
 
@@ -89,13 +110,14 @@ export function SceneCanvas() {
   const commit = useEditorStore((state) => state.commit);
   const assets = useEditorStore((state) => state.assets);
   const terrainAssets = useEditorStore((state) => state.terrainAssets);
+  const settings = useEditorStore((state) => state.settings);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x11161c);
-    scene.fog = new THREE.FogExp2(0x11161c, 0.012);
+    scene.background = new THREE.Color(DEFAULT_CANVAS_BACKGROUND);
+    scene.fog = new THREE.FogExp2(DEFAULT_CANVAS_BACKGROUND, 0.012);
     const camera = new THREE.PerspectiveCamera(
       45,
       host.clientWidth / host.clientHeight,
@@ -125,11 +147,14 @@ export function SceneCanvas() {
     orbit.maxPolarAngle = Math.PI * 0.49;
     orbit.update();
 
-    const grid = new THREE.GridHelper(200, 200, 0x69798a, 0x27313b);
+    const grid = new THREE.GridHelper(200, 200, 0x536675, 0xa4b2bc);
     grid.rotation.x = Math.PI / 2;
     grid.position.z = -0.001;
-    (grid.material as THREE.Material).opacity = 0.55;
-    (grid.material as THREE.Material).transparent = true;
+    const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material];
+    gridMaterials.forEach((material) => {
+      material.opacity = 0.55;
+      material.transparent = true;
+    });
     scene.add(grid);
 
     const hemisphere = new THREE.HemisphereLight(0xdce7f2, 0x273039, 2.2);
@@ -176,6 +201,7 @@ export function SceneCanvas() {
       outline,
       orbit,
       transform,
+      grid,
       content,
       draft: draftGroup,
       raycaster: new THREE.Raycaster(),
@@ -212,6 +238,12 @@ export function SceneCanvas() {
       engineRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    applyCanvasAppearance(engine, settings?.backgroundColor ?? DEFAULT_CANVAS_BACKGROUND);
+  }, [settings?.backgroundColor]);
 
   useEffect(() => {
     const engine = engineRef.current;

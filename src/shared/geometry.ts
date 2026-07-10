@@ -170,6 +170,14 @@ export function calculateStair(
   return { riserCount, riserHeight: floorHeight / riserCount };
 }
 
+export function gablePanelRotation(
+  side: -1 | 1,
+  ridgeAlongX: boolean,
+  pitchRadians: number,
+): { x: number; y: number } {
+  return ridgeAlongX ? { x: -side * pitchRadians, y: 0 } : { x: 0, y: side * pitchRadians };
+}
+
 export function formatArea(areaMm2: number, format: "m2" | "mm2"): string {
   return format === "m2"
     ? `${(areaMm2 / 1_000_000).toFixed(2)} m²`

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { gablePanelRotation } from "../../../shared/geometry";
 import type {
   AssetDefinition,
   BuildingDefinition,
@@ -181,14 +182,16 @@ function addRoof(group: THREE.Group, building: BuildingDefinition): void {
         ((minY + maxY) / 2 + (side * run) / 2) * MM_TO_M,
         (baseZ + rise / 2) * MM_TO_M,
       );
-      mesh.rotation.x = side * pitch;
+      const rotation = gablePanelRotation(side as -1 | 1, true, pitch);
+      mesh.rotation.x = rotation.x;
     } else {
       mesh.position.set(
         ((minX + maxX) / 2 + (side * run) / 2) * MM_TO_M,
         ((minY + maxY) / 2) * MM_TO_M,
         (baseZ + rise / 2) * MM_TO_M,
       );
-      mesh.rotation.y = -side * pitch;
+      const rotation = gablePanelRotation(side as -1 | 1, false, pitch);
+      mesh.rotation.y = rotation.y;
     }
     mesh.castShadow = true;
     mesh.receiveShadow = true;

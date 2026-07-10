@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateStair,
   formatArea,
+  gablePanelRotation,
   isWallOnFootprint,
   lockToConstructionAxis,
   polygonAreaMm2,
@@ -44,5 +45,13 @@ describe("building geometry", () => {
     expect(isWallOnFootprint({ x: 0, y: 0 }, { x: 5000, y: 0 }, rectangle)).toBe(true);
     expect(isWallOnFootprint({ x: 1000, y: 1000 }, { x: 4000, y: 1000 }, rectangle)).toBe(false);
     expect(calculateStair(2700)).toEqual({ riserCount: 15, riserHeight: 180 });
+  });
+
+  it("raises gable roof panels toward the ridge", () => {
+    const pitch = Math.PI / 6;
+    expect(gablePanelRotation(-1, true, pitch)).toEqual({ x: pitch, y: 0 });
+    expect(gablePanelRotation(1, true, pitch)).toEqual({ x: -pitch, y: 0 });
+    expect(gablePanelRotation(-1, false, pitch)).toEqual({ x: 0, y: -pitch });
+    expect(gablePanelRotation(1, false, pitch)).toEqual({ x: 0, y: pitch });
   });
 });

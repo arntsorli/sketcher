@@ -154,6 +154,14 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   </select>
                 </label>
               </div>
+              <label>
+                Canvas background colour
+                <input
+                  type="color"
+                  value={draft.backgroundColor}
+                  onChange={(event) => patch("backgroundColor", event.target.value)}
+                />
+              </label>
               <label className="check-label">
                 <input
                   type="checkbox"

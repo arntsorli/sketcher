@@ -209,6 +209,7 @@ export const globalSettingsSchema = z.object({
   majorGridSpacing: z.number().positive(),
   snapTolerance: z.number().positive(),
   graphicsQuality: z.enum(["low", "medium", "high"]),
+  backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex colour."),
   invertZoom: z.boolean(),
   terrainCacheMb: z.number().int().positive(),
 });

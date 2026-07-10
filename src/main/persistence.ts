@@ -41,6 +41,7 @@ export function defaultSettings(): GlobalSettings {
     majorGridSpacing: 1000,
     snapTolerance: 12,
     graphicsQuality: "high",
+    backgroundColor: "#dfe7ee",
     invertZoom: false,
     terrainCacheMb: 1024,
   };
