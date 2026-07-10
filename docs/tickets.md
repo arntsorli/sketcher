@@ -493,4 +493,4 @@ The following evidence is refreshed before each publication. Any failed command 
 | Desktop runtime | Home, editor, Builder direct input, sandbox boundary, and Manifold worker smoke pass |
 | Terrain runtime | Live Kartverket/Høydedata terrain smoke pass with a map-textured normalized mesh |
 | Windows distributions | NSIS setup, portable x64, and unpacked app build successfully; unpacked app smoke passes |
-| Public delivery | `main` CI and the `v0.1.4` release workflow pass; installer, portable build, and checksums are published |
+| Public delivery | `main` Windows CI passed for `1339cc3` after the envelope/map/site-asset batch; the latest tagged `v0.1.4` release still provides installer, portable build, and checksums |
