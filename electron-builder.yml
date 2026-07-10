@@ -1,0 +1,25 @@
+appId: no.sorli.sketcher
+productName: Sketcher
+asar: true
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**/*
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  artifactName: ${productName}-${version}-setup-${arch}.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+portable:
+  artifactName: ${productName}-${version}-portable-${arch}.${ext}

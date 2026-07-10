@@ -1,0 +1,48 @@
+# Sketcher
+
+Sketcher is a local-first Windows desktop application for millimetre-accurate architectural concept design. It separates parametric building work in **Builder** mode from property and site composition in **Architecture** mode.
+
+> Sketcher is a concept-design tool. It does not provide structural analysis, code-compliance checks, permit drawings, or construction-ready BIM output.
+
+## Current capabilities
+
+- Local `.sketcher` project archives with previews, embedded assets, atomic saves, crash recovery, and Recycle Bin deletion.
+- Z-up Three.js scene with grid, orbit camera, selection outlines, transform gizmos, and undo/redo commands.
+- Foundation polygons with grid/axis snapping, 5° Shift+wheel construction-axis offsets, direct millimetre input, area, and dimension overlays.
+- Parametric floors, external/internal walls, real door/window voids, straight stairs, and a final gable roof.
+- Shared building definitions, reusable building instances, Make Unique, procedural site objects, GLB/glTF import, and GLB export.
+- Kartverket place search, WMTS discovery, Høydedata elevation sampling, map-textured terrain, and local GeoTIFF terrain import.
+- Global settings and encrypted optional provider credentials.
+
+## Development
+
+Requirements: Windows, Node.js 22 or newer, and npm.
+
+```powershell
+npm install
+npm run dev
+```
+
+Validation and packaging:
+
+```powershell
+npm run ci
+npm run package
+```
+
+Detailed delivery status and remaining work are tracked in [docs/tickets.md](docs/tickets.md). Product boundaries and workflows are in [docs/product-spec.md](docs/product-spec.md).
+
+## Project files
+
+Projects use the `.sketcher` extension. Each file is a ZIP container with:
+
+- `model.json` — schema-versioned parametric project data.
+- `preview.webp` — home-screen preview.
+- `assets/` — imported GLB/glTF content.
+- `terrain/` — cached terrain source and imagery content.
+
+The default library is `%USERPROFILE%\Documents\Sketcher Projects` and can be changed in Global Settings.
+
+## License
+
+[MIT](LICENSE)
