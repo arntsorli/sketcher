@@ -1,6 +1,6 @@
 {
   "name": "sketcher",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A local-first Windows architecture modeller for concept design.",
   "license": "MIT",
   "author": "Arnt Sorli",

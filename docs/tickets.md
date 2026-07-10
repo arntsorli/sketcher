@@ -23,7 +23,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-015 | GeoTIFF and optional orthophoto providers | In progress | SK-014 | GeoTIFF fixture and credential-path tests |
 | SK-016 | Accessibility, performance, and failure hardening | Todo | SK-004–SK-015 | E2E, profiling, corrupt input suite |
 | SK-017 | Documentation and operator guidance | In progress | All feature tickets | Workflow illustrations and user guide |
-| SK-018 | Windows CI, packaging, and release automation | Done for v0.1.1 | SK-016 | Green public Actions and release runs |
+| SK-018 | Windows CI, packaging, and release automation | Done for tagged releases | SK-016 | Green public Actions and release runs |
 | SK-019 | Public GitHub publication | Done | SK-018 | Public remote, clean main, green workflow |
 | SK-020 | Configurable canvas background colour | Done | SK-006, SK-007 | Settings persistence, viewport application, and contrast check |
 
