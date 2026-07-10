@@ -23,8 +23,8 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-015 | GeoTIFF and optional orthophoto providers | In progress | SK-014 | GeoTIFF fixture and credential-path tests |
 | SK-016 | Accessibility, performance, and failure hardening | Todo | SK-004–SK-015 | E2E, profiling, corrupt input suite |
 | SK-017 | Documentation and operator guidance | In progress | All feature tickets | Workflow illustrations and user guide |
-| SK-018 | Windows CI, packaging, and release automation | In progress | SK-016 | Green public Actions and release runs |
-| SK-019 | Public GitHub publication | Todo | SK-018 | Public remote, clean main, green workflow |
+| SK-018 | Windows CI, packaging, and release automation | Done for v0.1.1 | SK-016 | Green public Actions and release runs |
+| SK-019 | Public GitHub publication | Done | SK-018 | Public remote, clean main, green workflow |
 
 ## Ticket details
 
@@ -328,20 +328,25 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Tagged release workflow for NSIS and portable x64 artifacts, checksums, and generated release notes.
 - Application metadata and icon plus successful local NSIS, portable, and unpacked-runtime smoke runs.
 
-**Remaining verification**
+**Verification completed**
 
-- Confirm the public Actions runs and version-tag release complete successfully.
+- Public Windows CI and `v0.1.1` release workflows completed successfully.
+- The release contains the NSIS setup executable, portable x64 executable, and SHA-256 checksum file.
+
+**Remaining hardening**
+
 - Perform a fresh-machine install/uninstall pass and document unsigned SmartScreen behaviour with screenshots.
 
 ### SK-019 — Public GitHub publication
 
 **Outcome:** `github.com/arntsorli/sketcher` is public, reproducible, and green.
 
-**Todo**
+**Completed**
 
-- Review full diff and generated files, run all checks, stage only the Sketcher tree, and commit tersely.
-- Create the public repository, push `main`, verify visibility/default branch/workflow status, and verify a clean synchronized worktree.
-- Add repository description, topics, and release-facing README metadata.
+- Reviewed and committed only the Sketcher source tree; generated builds, smoke state, captures, and dependencies remain ignored.
+- Published the public `arntsorli/sketcher` repository with `main` as its default branch.
+- Added description and architecture, CAD, Electron, Three.js, TypeScript, and Windows topics.
+- Verified Windows CI and the public `v0.1.1` release workflow, release assets, and checksums.
 
 ## Release acceptance checklist
 
@@ -354,7 +359,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - [x] Online terrain normalizes centre elevation to Z=0 and is embedded with its cached map for offline reopening.
 - [ ] GeoTIFF terrain imports with correct orientation, scale, and no-data handling.
 - [x] Local CI, dependency audit, build, NSIS, portable packaging, and unpacked-runtime smoke pass.
-- [ ] Public `main` is clean, synchronized, and green.
+- [x] Public `main` is clean, synchronized, and green.
 
 ## Latest verification evidence
 
@@ -367,4 +372,4 @@ The following evidence is refreshed before each publication. Any failed command 
 | Desktop runtime | Home, editor, Builder direct input, sandbox boundary, and Manifold worker smoke pass |
 | Terrain runtime | Live Kartverket/Høydedata terrain smoke pass with a map-textured normalized mesh |
 | Windows distributions | NSIS setup, portable x64, and unpacked app build successfully; unpacked app smoke passes |
-| Public delivery | Pending initial commit, GitHub publication, Actions, and tagged release |
+| Public delivery | `main` CI and the `v0.1.1` release workflow pass; installer, portable build, and checksums are published |

@@ -4,6 +4,10 @@ Sketcher is a local-first Windows desktop application for millimetre-accurate ar
 
 > Sketcher is a concept-design tool. It does not provide structural analysis, code-compliance checks, permit drawings, or construction-ready BIM output.
 
+## Download
+
+Download the Windows installer or portable x64 build from the [latest GitHub release](https://github.com/arntsorli/sketcher/releases/latest). The first releases are unsigned, so Windows SmartScreen may ask for confirmation.
+
 ## Current capabilities
 
 - Local `.sketcher` project archives with previews, embedded assets, atomic saves, crash recovery, and Recycle Bin deletion.
