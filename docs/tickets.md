@@ -345,7 +345,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 ## Release acceptance checklist
 
-- [x] Packaged Windows application launches and reports version 0.1.0.
+- [x] Packaged Windows application launches and reports the package version.
 - [ ] Fresh-machine install/uninstall and full Home create/open/save/recover/Save As/delete journey pass.
 - [x] Geometry tests confirm a 5000×8000 mm foundation reports 40.00 m² and 26,000 mm perimeter; direct-input creation is smoke tested.
 - [ ] External/internal walls, a door, a window, second floor, straight stair opening, and gable roof persist after restart.

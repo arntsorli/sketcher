@@ -1,9 +1,11 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const packageMetadata = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+const expectedVersion = packageMetadata.version;
 const artifacts = path.join(root, "artifacts");
 const smokeDirectory = path.join(root, ".smoke");
 await mkdir(artifacts, { recursive: true });
@@ -33,7 +35,9 @@ try {
   await window.waitForSelector(".home-page", { state: "visible" });
   await window.waitForTimeout(500);
   const version = await window.evaluate(() => window.sketcher.app.version());
-  if (version !== "0.1.0") throw new Error(`Unexpected app version: ${version}`);
+  if (version !== expectedVersion) {
+    throw new Error(`Unexpected app version: ${version}; expected ${expectedVersion}`);
+  }
   await window.screenshot({ path: path.join(artifacts, "home.png") });
 
   await window.getByRole("button", { name: "New project" }).click();
