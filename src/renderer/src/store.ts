@@ -292,6 +292,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setTool(tool) {
     set({
       tool,
+      placementDefinitionId: undefined,
+      placementAssetId: undefined,
       draft: { points: [], axisAngle: get().draft.axisAngle, numericInput: "" },
       status: `${tool.replace("-", " ")} tool`,
       error: undefined,
@@ -539,9 +541,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ activeFloorId: floorId, tool: "select" });
   },
 
-  placeBuilding(definitionId, position = { x: 0, y: 0 }) {
+  placeBuilding(definitionId, position?: Vec2) {
     const definition = get().project?.buildingDefinitions.find((item) => item.id === definitionId);
     if (!definition) return;
+    if (!position) {
+      set({
+        tool: "place-building",
+        placementDefinitionId: definitionId,
+        placementAssetId: undefined,
+        selection: null,
+        draft: { points: [], axisAngle: get().draft.axisAngle, numericInput: "" },
+        status: `Click the grid to place ${definition.name}. Escape cancels.`,
+        error: undefined,
+      });
+      return;
+    }
     const id = crypto.randomUUID();
     get().commit("Building placed", (project) => {
       project.scene.buildingInstances.push({
@@ -552,7 +566,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         visible: true,
       });
     });
-    set({ selection: { type: "building", id }, tool: "select" });
+    set({
+      selection: { type: "building", id },
+      tool: "select",
+      placementDefinitionId: undefined,
+      placementAssetId: undefined,
+      draft: { points: [], axisAngle: get().draft.axisAngle, numericInput: "" },
+    });
   },
 
   makeSelectedBuildingUnique() {
@@ -578,9 +598,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  placeAsset(definitionId, position = { x: 0, y: 0 }) {
+  placeAsset(definitionId, position?: Vec2) {
     const definition = get().project?.assetDefinitions.find((item) => item.id === definitionId);
     if (!definition) return;
+    if (!position) {
+      set({
+        tool: "place-asset",
+        placementDefinitionId: undefined,
+        placementAssetId: definitionId,
+        selection: null,
+        draft: { points: [], axisAngle: get().draft.axisAngle, numericInput: "" },
+        status: `Click the grid to place ${definition.name}. Escape cancels.`,
+        error: undefined,
+      });
+      return;
+    }
     const id = crypto.randomUUID();
     get().commit("Object placed", (project) => {
       project.scene.assetInstances.push({
@@ -591,7 +623,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         visible: true,
       });
     });
-    set({ selection: { type: "asset", id }, tool: "select" });
+    set({
+      selection: { type: "asset", id },
+      tool: "select",
+      placementDefinitionId: undefined,
+      placementAssetId: undefined,
+      draft: { points: [], axisAngle: get().draft.axisAngle, numericInput: "" },
+    });
   },
 
   addTerrain(layer, elevationArchiveData, imageryArchiveData) {

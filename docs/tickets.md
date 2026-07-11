@@ -198,7 +198,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Snap walls to existing endpoints, corners, and edges with visible snap markers.
 - Implement floor reorder and dependency-aware floor deletion dialog.
-- Honour inside/centre/outside wall alignment geometrically; current wall mesh is centred.
+- Automatic exterior walls now align their outer face to the footprint boundary for either winding; add explicit visual tests for manual inside/centre/outside overrides.
 - Recompute only auto-classified walls after footprint edits.
 
 ### SK-010 — Openings, stairs, and gable roof
@@ -244,7 +244,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Todo / hardening**
 
-- Click-to-place preview at the pointer instead of initial placement at the origin.
+- Buildings now enter a translucent grid-snapped pointer preview and are placed by click; Escape cancels without mutating the scene.
 - Generate definition thumbnails and expose rename/delete with dependency confirmation.
 - Add an automated shared-two-instances/Make-Unique propagation test.
 
@@ -261,7 +261,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Validate imported glTF external-resource references and provide a clear unsupported message.
 - Export selected building as a separate option, retain millimetre metadata, and verify textures/materials.
-- Add asset rename/delete and placement preview.
+- Built-in asset buttons now enter a translucent grid-snapped pointer preview and click-to-place flow; add asset rename/delete and GLB placement preview.
 - Test GLB round-trip with compressed and textured fixtures.
 
 ### SK-014 — Terrain provider framework and online Norway terrain
@@ -405,7 +405,8 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Remaining coverage**
 
-- Add E2E journeys for multi-room walls, doors/windows, stairs, roof persistence, shared-instance propagation, asset GLB interchange, delete/recovery, terrain offline reopening, and corrupt-file/error handling.
+- The desktop E2E now also places two shared building instances and a hedge through visible pointer previews, saves, reopens, and confirms the persisted scene counts.
+- Add E2E journeys for multi-room walls, doors/windows, stairs, roof persistence, Make Unique propagation, asset GLB interchange, delete/recovery, terrain offline reopening, and corrupt-file/error handling.
 - Add visual assertions for snap glyphs, dimension readability, screen scaling, and selected-object outlines.
 
 ### SK-023 — Foundation legibility and grid snap

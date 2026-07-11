@@ -21,7 +21,7 @@ import { useEditorStore } from "../store";
 import { buildWallSolid } from "../workers/geometryClient";
 import type { WallSolidRequest } from "../workers/geometryTypes";
 import { setExportRoot } from "./sceneBridge";
-import { createProjectContent } from "./sceneGeometry";
+import { createBuildingGroup, createBuiltinAsset, createProjectContent } from "./sceneGeometry";
 
 interface DimensionLine {
   key: string;
@@ -260,12 +260,16 @@ export function SceneCanvas() {
   const selection = useEditorStore((state) => state.selection);
   const activeBuildingId = useEditorStore((state) => state.activeBuildingId);
   const activeFloorId = useEditorStore((state) => state.activeFloorId);
+  const placementDefinitionId = useEditorStore((state) => state.placementDefinitionId);
+  const placementAssetId = useEditorStore((state) => state.placementAssetId);
   const draft = useEditorStore((state) => state.draft);
   const setDraft = useEditorStore((state) => state.setDraft);
   const addFoundationPoint = useEditorStore((state) => state.addFoundationPoint);
   const addWallSegment = useEditorStore((state) => state.addWallSegment);
   const addOpening = useEditorStore((state) => state.addOpening);
   const addStair = useEditorStore((state) => state.addStair);
+  const placeBuilding = useEditorStore((state) => state.placeBuilding);
+  const placeAsset = useEditorStore((state) => state.placeAsset);
   const setSelection = useEditorStore((state) => state.setSelection);
   const commit = useEditorStore((state) => state.commit);
   const assets = useEditorStore((state) => state.assets);
@@ -634,6 +638,7 @@ export function SceneCanvas() {
       "data-opening-preview",
       openingPreview ? (openingPreview.valid ? "valid" : "invalid") : "none",
     );
+    hostRef.current?.setAttribute("data-placement-preview", "none");
     const points = [...draft.points];
     if (draft.wallStart) points.push(draft.wallStart);
     if (draft.hover && (draft.points.length > 0 || draft.wallStart)) points.push(draft.hover);
@@ -709,6 +714,43 @@ export function SceneCanvas() {
       gridTarget.renderOrder = 1001;
       engine.draft.add(gridTarget);
     }
+    if (
+      mode === "architecture" &&
+      draft.hover &&
+      (tool === "place-building" || tool === "place-asset")
+    ) {
+      const preview =
+        tool === "place-building"
+          ? (() => {
+              const definition = project?.buildingDefinitions.find(
+                (item) => item.id === placementDefinitionId,
+              );
+              return definition ? createBuildingGroup(definition) : undefined;
+            })()
+          : (() => {
+              const definition = project?.assetDefinitions.find(
+                (item) => item.id === placementAssetId,
+              );
+              return definition ? createBuiltinAsset(definition) : undefined;
+            })();
+      if (preview) {
+        preview.position.set(draft.hover.x / 1000, draft.hover.y / 1000, 0.02);
+        preview.traverse((child) => {
+          if (!(child instanceof THREE.Mesh)) return;
+          const source = Array.isArray(child.material) ? child.material[0] : child.material;
+          if (!source) return;
+          const previewMaterial = source.clone();
+          previewMaterial.transparent = true;
+          previewMaterial.opacity = 0.48;
+          previewMaterial.depthWrite = false;
+          child.material = previewMaterial;
+          child.renderOrder = 995;
+        });
+        preview.userData = { placementPreview: tool };
+        engine.draft.add(preview);
+        hostRef.current?.setAttribute("data-placement-preview", tool);
+      }
+    }
     if (openingPreview) {
       const { wall } = openingPreview;
       const wallLength = distance(wall.start, wall.end);
@@ -757,7 +799,7 @@ export function SceneCanvas() {
       guideLine.renderOrder = 999;
       engine.draft.add(guideLine);
     }
-  }, [draft, openingPreview, tool]);
+  }, [draft, mode, openingPreview, placementAssetId, placementDefinitionId, project, tool]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -807,8 +849,9 @@ export function SceneCanvas() {
       const point = pointerPoint(event);
       if (
         point &&
-        mode === "builder" &&
-        ["foundation", "wall", "door", "window", "carport", "stair"].includes(tool)
+        ((mode === "builder" &&
+          ["foundation", "wall", "door", "window", "carport", "stair"].includes(tool)) ||
+          (mode === "architecture" && ["place-building", "place-asset"].includes(tool)))
       ) {
         setDraft({ hover: point });
       }
@@ -833,6 +876,15 @@ export function SceneCanvas() {
           if (entity.type === "wall" && entity.id) setSelection({ type: "wall", id: entity.id });
           else setSelection(null);
         }
+        return;
+      }
+      const current = useEditorStore.getState();
+      if (tool === "place-building" && current.placementDefinitionId) {
+        placeBuilding(current.placementDefinitionId, point);
+        return;
+      }
+      if (tool === "place-asset" && current.placementAssetId) {
+        placeAsset(current.placementAssetId, point);
         return;
       }
       engine.raycaster.setFromCamera(engine.pointer, engine.camera);
@@ -871,6 +923,8 @@ export function SceneCanvas() {
     addWallSegment,
     addOpening,
     addStair,
+    placeAsset,
+    placeBuilding,
     setSelection,
   ]);
 
@@ -900,6 +954,16 @@ export function SceneCanvas() {
       if (event.key.toLowerCase() === "r") engine.transform.setMode("rotate");
       if (event.key.toLowerCase() === "s" && state.selection?.type === "asset")
         engine.transform.setMode("scale");
+      if (
+        event.key === "Escape" &&
+        state.mode === "architecture" &&
+        (state.tool === "place-building" || state.tool === "place-asset")
+      ) {
+        event.preventDefault();
+        state.setTool("select");
+        state.setStatus("Placement cancelled");
+        return;
+      }
       if (state.mode !== "builder" || !["foundation", "wall"].includes(state.tool)) return;
       const target = event.target;
       if (target instanceof HTMLInputElement && target !== inputRef.current) return;

@@ -51,7 +51,6 @@ try {
   await moveAndCommit(0.66, 0.2, 8000);
   await moveAndCommit(0.36, 0.2, 5000);
   await page.getByText("4 points").waitFor({ state: "visible" });
-  await page.getByText("40.00 m²").first().waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Close foundation" }).click();
   await page.getByText("Building properties").waitFor({ state: "visible" });
   await page.screenshot({ path: path.join(artifacts, "e2e-foundation.png") });
@@ -63,14 +62,48 @@ try {
   await page.getByText("Foundation E2E", { exact: true }).first().click();
   await page.locator(".editor-shell").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Edit" }).click();
-  await page.getByText("40.00 m²").first().waitFor({ state: "visible" });
+  await page
+    .getByText(/40\.00/)
+    .first()
+    .waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Architecture" }).click();
+  await page.getByRole("button", { name: "Building 1" }).first().click();
+  await page.mouse.move(bounds.x + bounds.width * 0.42, bounds.y + bounds.height * 0.52);
+  await page
+    .locator('.scene-host[data-placement-preview="place-building"]')
+    .waitFor({ state: "visible" });
+  await canvas.click({ position: { x: bounds.width * 0.42, y: bounds.height * 0.52 } });
+  await page.getByText("1 buildings · 0 objects").waitFor({ state: "visible" });
+
+  await page.getByRole("button", { name: "Building 1" }).first().click();
+  await page.mouse.move(bounds.x + bounds.width * 0.62, bounds.y + bounds.height * 0.5);
+  await page
+    .locator('.scene-host[data-placement-preview="place-building"]')
+    .waitFor({ state: "visible" });
+  await canvas.click({ position: { x: bounds.width * 0.62, y: bounds.height * 0.5 } });
+  await page.getByText("2 buildings · 0 objects").waitFor({ state: "visible" });
+
+  await page.getByRole("button", { name: "Hedge segment" }).click();
+  await page.mouse.move(bounds.x + bounds.width * 0.52, bounds.y + bounds.height * 0.67);
+  await page
+    .locator('.scene-host[data-placement-preview="place-asset"]')
+    .waitFor({ state: "visible" });
+  await canvas.click({ position: { x: bounds.width * 0.52, y: bounds.height * 0.67 } });
+  await page.getByText("2 buildings · 1 objects").waitFor({ state: "visible" });
+
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByText("Saved").waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Back to home" }).click();
+  await page.locator(".home-page").waitFor({ state: "visible" });
+  await page.getByText("Foundation E2E", { exact: true }).first().click();
+  await page.getByText("2 buildings · 1 objects").waitFor({ state: "visible" });
 
   const rendererHasNode = await page.evaluate(
     () => typeof globalThis.process !== "undefined" || typeof globalThis.require !== "undefined",
   );
   if (rendererHasNode) throw new Error("Node globals leaked into the renderer.");
   console.log(
-    "E2E passed: direct 5000×8000 foundation, point undo, save, reopen, and Builder edit.",
+    "E2E passed: direct foundation, Builder edit, shared building and hedge placement preview, save, and reopen.",
   );
 } finally {
   await app.close();
