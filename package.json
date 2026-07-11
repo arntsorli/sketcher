@@ -9,6 +9,7 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "clean:release": "node scripts/clean-release.mjs",
+    "privacy:check": "node scripts/privacy-check.mjs",
     "package": "npm run clean:release && npm run build && electron-builder --win nsis portable --publish never",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "e2e": "npm run build && node scripts/e2e.mjs",
@@ -17,7 +18,7 @@
     "format": "biome check --write .",
     "icon": "node scripts/build-icon.mjs",
     "test": "vitest",
-    "ci": "npm run check && npm run typecheck && npm test -- --run && npm run build"
+    "ci": "npm run privacy:check && npm run check && npm run typecheck && npm test -- --run && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "1.1.19",

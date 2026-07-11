@@ -350,6 +350,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Perform a fresh-machine install/uninstall pass and document unsigned SmartScreen behaviour with screenshots.
 - Add an explicit artifact-retention policy if nightly/history builds are introduced; the rolling latest release intentionally retains only its current files.
+- Privacy review now runs in `npm run ci` and rejects tracked home paths, personal emails, private keys, and common credential tokens before publishing.
 
 ### SK-019 — Public GitHub publication
 
