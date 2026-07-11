@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
-    "package": "npm run build && electron-builder --win nsis portable --publish never",
+    "clean:release": "node scripts/clean-release.mjs",
+    "package": "npm run clean:release && npm run build && electron-builder --win nsis portable --publish never",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "e2e": "npm run build && node scripts/e2e.mjs",
     "typecheck": "tsc --noEmit",

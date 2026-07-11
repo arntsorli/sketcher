@@ -332,13 +332,14 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 ### SK-018 — Windows CI, packaging, and release automation
 
-**Outcome:** Every commit is checked and version tags produce downloadable Windows artifacts.
+**Outcome:** Every code-changing `main` commit is checked and produces a rolling latest Windows build; version tags retain downloadable historical snapshots.
 
 **Implemented**
 
 - Windows GitHub Actions for install, Biome, typecheck, unit tests, build, package, and dependency audit.
 - Tagged release workflow for NSIS and portable x64 artifacts, checksums, and generated release notes.
 - Application metadata and icon plus successful local NSIS, portable, and unpacked-runtime smoke runs.
+- Code-changing pushes to `main` now clean `release/`, package fresh NSIS/portable artifacts, replace the rolling `latest` release assets and checksums, and mark that release as GitHub Latest. Markdown-only changes do not consume a packaging run.
 
 **Verification completed**
 
@@ -348,6 +349,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **Remaining hardening**
 
 - Perform a fresh-machine install/uninstall pass and document unsigned SmartScreen behaviour with screenshots.
+- Add an explicit artifact-retention policy if nightly/history builds are introduced; the rolling latest release intentionally retains only its current files.
 
 ### SK-019 — Public GitHub publication
 

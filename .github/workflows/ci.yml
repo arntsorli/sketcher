@@ -3,12 +3,18 @@ name: Windows CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -34,3 +40,50 @@ jobs:
           name: smoke-captures
           path: artifacts/
           if-no-files-found: ignore
+
+  publish-latest:
+    name: Package and publish latest Windows build
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Clean and package Windows artifacts
+        run: npm run package
+      - name: Create SHA256 checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem release -Filter *.exe | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)" | Add-Content -Path release/SHA256SUMS.txt
+          }
+      - name: Move rolling latest tag to this commit
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --force latest $env:GITHUB_SHA
+          git push origin refs/tags/latest --force
+      - name: Replace rolling latest release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $title = "Sketcher latest Windows build"
+          $notes = "Automated Windows build from commit $env:GITHUB_SHA. This rolling release is replaced after each successful code change on main."
+          gh release view latest 2>$null
+          $exists = $LASTEXITCODE -eq 0
+          if ($exists) {
+            gh release upload latest release/*.exe release/SHA256SUMS.txt --clobber
+            gh release edit latest --title $title --notes $notes --latest
+          } else {
+            gh release create latest release/*.exe release/SHA256SUMS.txt --verify-tag --title $title --notes $notes --latest
+          }
