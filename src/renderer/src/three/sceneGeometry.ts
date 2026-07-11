@@ -10,6 +10,7 @@ import type {
 import type { WallSolidRequest } from "../workers/geometryTypes";
 
 const MM_TO_M = 0.001;
+const JOIN_TOLERANCE_MM = 1;
 
 function material(color: number, opacity = 1): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
@@ -97,16 +98,163 @@ function footprintInsideSign(wall: Wall, footprint: BuildingDefinition["footprin
   return inside ? 1 : -1;
 }
 
+interface WallMiterProfile {
+  low: number;
+  high: number;
+  start: { low: number; high: number };
+  end: { low: number; high: number };
+  hasMiter: boolean;
+}
+
+function wallOffsets(wall: Wall, insideSign: 1 | -1): { low: number; high: number } {
+  if (wall.alignment === "center") {
+    return { low: -wall.thickness / 2, high: wall.thickness / 2 };
+  }
+  const interiorOnLeft = insideSign > 0;
+  if (wall.alignment === "inside") {
+    return interiorOnLeft ? { low: 0, high: wall.thickness } : { low: -wall.thickness, high: 0 };
+  }
+  return interiorOnLeft ? { low: -wall.thickness, high: 0 } : { low: 0, high: wall.thickness };
+}
+
+function normalizedDirection(wall: Wall): { x: number; y: number; length: number } | null {
+  const x = wall.end.x - wall.start.x;
+  const y = wall.end.y - wall.start.y;
+  const length = Math.hypot(x, y);
+  return length > 0 ? { x: x / length, y: y / length, length } : null;
+}
+
+function lineIntersection(
+  origin: { x: number; y: number },
+  direction: { x: number; y: number },
+  otherOrigin: { x: number; y: number },
+  otherDirection: { x: number; y: number },
+): { x: number; y: number } | null {
+  const cross = direction.x * otherDirection.y - direction.y * otherDirection.x;
+  if (Math.abs(cross) < 1e-6) return null;
+  const deltaX = otherOrigin.x - origin.x;
+  const deltaY = otherOrigin.y - origin.y;
+  const scale = (deltaX * otherDirection.y - deltaY * otherDirection.x) / cross;
+  return { x: origin.x + direction.x * scale, y: origin.y + direction.y * scale };
+}
+
+function samePoint(left: { x: number; y: number }, right: { x: number; y: number }): boolean {
+  return Math.hypot(left.x - right.x, left.y - right.y) <= JOIN_TOLERANCE_MM;
+}
+
+function endpointJoinCandidates(wall: Wall, endpoint: "start" | "end", walls: Wall[]): Wall[] {
+  const vertex = wall[endpoint];
+  return walls.filter((candidate) => {
+    if (candidate.id === wall.id || candidate.floorId !== wall.floorId) return false;
+    return samePoint(vertex, candidate.start) || samePoint(vertex, candidate.end);
+  });
+}
+
+export function calculateWallMiterProfile(
+  wall: Wall,
+  walls: Wall[],
+  footprint: BuildingDefinition["footprint"],
+): WallMiterProfile {
+  const direction = normalizedDirection(wall);
+  const insideSign = wall.type === "external" ? footprintInsideSign(wall, footprint) : 1;
+  const offsets = wallOffsets(wall, insideSign);
+  const base = {
+    low: offsets.low,
+    high: offsets.high,
+    start: { low: 0, high: 0 },
+    end: { low: direction?.length ?? 0, high: direction?.length ?? 0 },
+    hasMiter: false,
+  };
+  if (!direction || wall.type !== "external") return base;
+  const normal = { x: -direction.y, y: direction.x };
+  const insideOffset = insideSign > 0 ? offsets.high : offsets.low;
+
+  const cutEndpoint = (endpoint: "start" | "end") => {
+    const candidates = endpointJoinCandidates(wall, endpoint, walls).filter(
+      (candidate) => candidate.type === "external",
+    );
+    if (candidates.length !== 1) return base[endpoint];
+    const mate = candidates[0];
+    if (!mate) return base[endpoint];
+    const mateDirection = normalizedDirection(mate);
+    if (!mateDirection) return base[endpoint];
+    const mateInsideSign = footprintInsideSign(mate, footprint);
+    const mateOffsets = wallOffsets(mate, mateInsideSign);
+    const mateInsideOffset = mateInsideSign > 0 ? mateOffsets.high : mateOffsets.low;
+    const mateNormal = { x: -mateDirection.y, y: mateDirection.x };
+    const vertex = wall[endpoint];
+    const baseX = endpoint === "start" ? 0 : direction.length;
+    const intersectFor = (offset: number) => {
+      const sameFace = Math.abs(offset - insideOffset) < JOIN_TOLERANCE_MM;
+      const mateOffset = sameFace
+        ? mateInsideOffset
+        : mateInsideSign > 0
+          ? mateOffsets.low
+          : mateOffsets.high;
+      const intersection = lineIntersection(
+        { x: vertex.x + normal.x * offset, y: vertex.y + normal.y * offset },
+        direction,
+        { x: vertex.x + mateNormal.x * mateOffset, y: vertex.y + mateNormal.y * mateOffset },
+        mateDirection,
+      );
+      if (!intersection) return baseX;
+      const localX =
+        (intersection.x - wall.start.x) * direction.x +
+        (intersection.y - wall.start.y) * direction.y;
+      const maximumMiter = Math.max(1000, wall.thickness * 4, mate.thickness * 4);
+      return Math.abs(localX - baseX) <= maximumMiter ? localX : baseX;
+    };
+    return { low: intersectFor(offsets.low), high: intersectFor(offsets.high) };
+  };
+
+  const start = cutEndpoint("start");
+  const end = cutEndpoint("end");
+  return {
+    ...base,
+    start,
+    end,
+    hasMiter:
+      Math.abs(start.low) > JOIN_TOLERANCE_MM ||
+      Math.abs(start.high) > JOIN_TOLERANCE_MM ||
+      Math.abs(end.low - direction.length) > JOIN_TOLERANCE_MM ||
+      Math.abs(end.high - direction.length) > JOIN_TOLERANCE_MM,
+  };
+}
+
 function boxPiece(
   group: THREE.Group,
   wall: Wall,
   insideSign: 1 | -1,
+  miter: WallMiterProfile | undefined,
   startAlong: number,
   width: number,
   baseHeight: number,
   height: number,
 ): void {
   if (width <= 0 || height <= 0) return;
+  if (miter) {
+    const fullLength = normalizedDirection(wall)?.length ?? 0;
+    const endAlong = startAlong + width;
+    const startLow = Math.abs(startAlong) < JOIN_TOLERANCE_MM ? miter.start.low : startAlong;
+    const startHigh = Math.abs(startAlong) < JOIN_TOLERANCE_MM ? miter.start.high : startAlong;
+    const endLow = Math.abs(endAlong - fullLength) < JOIN_TOLERANCE_MM ? miter.end.low : endAlong;
+    const endHigh = Math.abs(endAlong - fullLength) < JOIN_TOLERANCE_MM ? miter.end.high : endAlong;
+    const shape = new THREE.Shape();
+    shape.moveTo(startLow * MM_TO_M, miter.low * MM_TO_M);
+    shape.lineTo(endLow * MM_TO_M, miter.low * MM_TO_M);
+    shape.lineTo(endHigh * MM_TO_M, miter.high * MM_TO_M);
+    shape.lineTo(startHigh * MM_TO_M, miter.high * MM_TO_M);
+    shape.closePath();
+    const mesh = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(shape, { depth: height * MM_TO_M, bevelEnabled: false }),
+      wall.type === "external" ? materials.externalWall : materials.internalWall,
+    );
+    mesh.position.z = baseHeight * MM_TO_M;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    return;
+  }
   const centerAlong = startAlong + width / 2;
   const geometry = new THREE.BoxGeometry(
     width * MM_TO_M,
@@ -133,12 +281,14 @@ function wallWithOpenings(
   group: THREE.Group,
   footprint: BuildingDefinition["footprint"],
   wall: Wall,
+  walls: Wall[],
   openings: Opening[],
   floorElevation: number,
   floorHeight: number,
 ): void {
   const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
   const insideSign = wall.type === "external" ? footprintInsideSign(wall, footprint) : 1;
+  const miter = calculateWallMiterProfile(wall, walls, footprint);
   const sorted = openings
     .filter((opening) => opening.wallId === wall.id)
     .sort((left, right) => left.offset - right.offset);
@@ -162,18 +312,55 @@ function wallWithOpenings(
     entityType: "wall",
     entityId: wall.id,
     wallType: wall.type,
-    manifoldRequest,
+    ...(miter.hasMiter ? {} : { manifoldRequest }),
+    joinery: miter.hasMiter ? "miter-fallback" : undefined,
   };
   group.add(wallGroup);
   let cursor = 0;
   for (const opening of sorted) {
-    boxPiece(wallGroup, wall, insideSign, cursor, opening.offset - cursor, 0, floorHeight);
-    boxPiece(wallGroup, wall, insideSign, opening.offset, opening.width, 0, opening.sillHeight);
+    boxPiece(
+      wallGroup,
+      wall,
+      insideSign,
+      miter.hasMiter ? miter : undefined,
+      cursor,
+      opening.offset - cursor,
+      0,
+      floorHeight,
+    );
+    boxPiece(
+      wallGroup,
+      wall,
+      insideSign,
+      miter.hasMiter ? miter : undefined,
+      opening.offset,
+      opening.width,
+      0,
+      opening.sillHeight,
+    );
     const top = opening.sillHeight + opening.height;
-    boxPiece(wallGroup, wall, insideSign, opening.offset, opening.width, top, floorHeight - top);
+    boxPiece(
+      wallGroup,
+      wall,
+      insideSign,
+      miter.hasMiter ? miter : undefined,
+      opening.offset,
+      opening.width,
+      top,
+      floorHeight - top,
+    );
     cursor = Math.max(cursor, opening.offset + opening.width);
   }
-  boxPiece(wallGroup, wall, insideSign, cursor, length - cursor, 0, floorHeight);
+  boxPiece(
+    wallGroup,
+    wall,
+    insideSign,
+    miter.hasMiter ? miter : undefined,
+    cursor,
+    length - cursor,
+    0,
+    floorHeight,
+  );
 }
 
 function addRoof(group: THREE.Group, building: BuildingDefinition): void {
@@ -248,11 +435,20 @@ function addRoof(group: THREE.Group, building: BuildingDefinition): void {
   group.add(mesh);
 }
 
-export function createBuildingGroup(building: BuildingDefinition): THREE.Group {
+export function createBuildingGroup(
+  building: BuildingDefinition,
+  builderFloorId?: string,
+): THREE.Group {
   const group = new THREE.Group();
   group.name = building.name;
   const storyFloors = building.floors.filter((item) => item.type === "story");
+  const selectedFloor = building.floors.find((floor) => floor.id === builderFloorId);
+  const highestVisibleStory =
+    selectedFloor?.type === "story"
+      ? storyFloors.findIndex((floor) => floor.id === selectedFloor.id)
+      : Number.POSITIVE_INFINITY;
   for (const [floorIndex, floor] of storyFloors.entries()) {
+    if (floorIndex > highestVisibleStory) continue;
     const shape = shapeFromFootprint(building, floorIndex);
     const slab = new THREE.Mesh(
       new THREE.ExtrudeGeometry(shape, {
@@ -270,6 +466,7 @@ export function createBuildingGroup(building: BuildingDefinition): THREE.Group {
         group,
         building.footprint,
         wall,
+        building.walls,
         building.openings,
         floor.elevation + floor.slabThickness,
         floor.height,
@@ -297,7 +494,7 @@ export function createBuildingGroup(building: BuildingDefinition): THREE.Group {
       }
     }
   }
-  addRoof(group, building);
+  if (!builderFloorId || selectedFloor?.type === "roof") addRoof(group, building);
   return group;
 }
 
@@ -424,13 +621,14 @@ export function createProjectContent(
   project: ProjectDocument,
   builderId?: string,
   terrainAssets: Record<string, string> = {},
+  builderFloorId?: string,
 ): THREE.Group {
   const content = new THREE.Group();
   content.name = "Sketcher content";
   if (builderId) {
     const building = project.buildingDefinitions.find((item) => item.id === builderId);
     if (building) {
-      const group = createBuildingGroup(building);
+      const group = createBuildingGroup(building, builderFloorId);
       group.userData = { entityType: "building-definition", entityId: building.id };
       content.add(group);
     }

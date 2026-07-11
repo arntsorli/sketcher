@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ignoredFiles = new Set(["package-lock.json"]);
+const ignoredFiles = new Set(["package-lock.json", "scripts/privacy-check.mjs"]);
 const checks = [
   ["Windows or macOS home path", /(?:[A-Z]:\\Users\\|\\OneDrive\\|\/Users\/)/i],
   ["private key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],

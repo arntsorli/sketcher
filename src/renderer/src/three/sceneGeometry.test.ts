@@ -1,7 +1,7 @@
 import { Box3, type Object3D } from "three";
 import { describe, expect, it } from "vitest";
 import type { BuildingDefinition, Vec2 } from "../../../shared/model";
-import { createBuildingGroup } from "./sceneGeometry";
+import { calculateWallMiterProfile, createBuildingGroup } from "./sceneGeometry";
 
 function buildingFor(footprint: Vec2[]): BuildingDefinition {
   return {
@@ -66,6 +66,14 @@ function childByType(group: Object3D, entityType: string): Object3D {
   return found;
 }
 
+function countByType(group: Object3D, entityType: string): number {
+  let count = 0;
+  group.traverse((child) => {
+    if (child.userData.entityType === entityType) count += 1;
+  });
+  return count;
+}
+
 describe("building envelope geometry", () => {
   it("keeps automatic exterior walls entirely inside both footprint windings", () => {
     const counterClockwise = createBuildingGroup(
@@ -104,5 +112,79 @@ describe("building envelope geometry", () => {
     expect(roofBounds.max.z).toBeGreaterThan(2.9);
     expect(roofBounds.max.x).toBeGreaterThan(6);
     expect(roofBounds.max.y).toBeGreaterThan(5);
+  });
+
+  it("miters exterior walls at a right-angle foundation corner", () => {
+    const footprint = [
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 5000, y: 4000 },
+      { x: 0, y: 4000 },
+    ];
+    const first = buildingFor(footprint).walls[0];
+    if (!first) throw new Error("Missing first wall");
+    const second = {
+      ...first,
+      id: "outside-wall-2",
+      start: { x: 5000, y: 0 },
+      end: { x: 5000, y: 4000 },
+    };
+    const firstProfile = calculateWallMiterProfile(first, [first, second], footprint);
+    const secondProfile = calculateWallMiterProfile(second, [first, second], footprint);
+    expect(firstProfile.hasMiter).toBe(true);
+    expect(firstProfile.end).toEqual({ low: 5000, high: 4750 });
+    expect(secondProfile.start).toEqual({ low: 0, high: 250 });
+  });
+
+  it("derives finite asymmetric cuts for an angled exterior corner", () => {
+    const footprint = [
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 7000, y: 3000 },
+      { x: 0, y: 3000 },
+    ];
+    const first = buildingFor(footprint).walls[0];
+    if (!first) throw new Error("Missing first wall");
+    const angled = {
+      ...first,
+      id: "angled-wall",
+      start: { x: 5000, y: 0 },
+      end: { x: 7000, y: 3000 },
+    };
+    const profile = calculateWallMiterProfile(first, [first, angled], footprint);
+    expect(profile.hasMiter).toBe(true);
+    expect(profile.end.low).not.toBeCloseTo(profile.end.high);
+    expect(profile.end.low).toBeGreaterThan(4000);
+    expect(profile.end.high).toBeGreaterThan(4000);
+  });
+
+  it("hides upper Builder floors until their floor or roof is selected", () => {
+    const building = buildingFor([
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 5000, y: 4000 },
+      { x: 0, y: 4000 },
+    ]);
+    const ground = building.floors[0];
+    const roof = building.floors[1];
+    if (!ground || !roof) throw new Error("Missing test floors");
+    const upper = {
+      ...ground,
+      id: "upper",
+      name: "Upper floor",
+      elevation: 2900,
+    };
+    roof.elevation = 5800;
+    building.floors = [ground, upper, roof];
+
+    const groundView = createBuildingGroup(building, ground.id);
+    const upperView = createBuildingGroup(building, upper.id);
+    const roofView = createBuildingGroup(building, roof.id);
+    expect(countByType(groundView, "floor")).toBe(1);
+    expect(countByType(groundView, "roof")).toBe(0);
+    expect(countByType(upperView, "floor")).toBe(2);
+    expect(countByType(upperView, "roof")).toBe(0);
+    expect(countByType(roofView, "floor")).toBe(2);
+    expect(countByType(roofView, "roof")).toBe(1);
   });
 });

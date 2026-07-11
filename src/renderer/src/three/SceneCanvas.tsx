@@ -511,6 +511,7 @@ export function SceneCanvas() {
       project,
       mode === "builder" ? activeBuildingId : undefined,
       terrainAssets,
+      mode === "builder" ? activeFloorId : undefined,
     );
     while (next.children.length > 0) {
       const child = next.children[0];
@@ -590,7 +591,7 @@ export function SceneCanvas() {
       cancelled = true;
       controller.abort();
     };
-  }, [project, mode, activeBuildingId, assets, terrainAssets]);
+  }, [project, mode, activeBuildingId, activeFloorId, assets, terrainAssets]);
 
   useEffect(() => {
     const engine = engineRef.current;

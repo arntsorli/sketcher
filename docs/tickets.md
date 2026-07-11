@@ -483,11 +483,11 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Todo**
 
-- Detect all wall segments that share a floor-plan corner, including non-orthogonal intersections.
-- Derive paired endpoint trims from the wall centre lines and thicknesses; use a miter for compatible joins and a deterministic butt/trim rule for T-junctions.
-- Apply the same junction result to fallback meshes and Manifold wall-solid requests so the visual result and exported solid agree.
+- Exterior wall pairs with one shared endpoint now derive matching inside/outside miter cuts from their actual directions and thicknesses, including non-orthogonal corners.
+- Mitered walls use an extruded fallback profile so the visible join is clean while standard unjoined walls retain the Manifold path.
+- T-junctions, multiple walls at one endpoint, internal-wall joins, and Manifold/export parity remain to be implemented.
 - Preserve manual wall alignment/type overrides and provide a validation message for degenerate or unresolved junctions.
-- Add golden bounds/volume tests for 90°, acute, obtuse, T, and mixed-thickness corners.
+- Geometry tests cover 90° and angled exterior corners; add golden bounds/volume tests for acute, obtuse, T, and mixed-thickness cases.
 
 ### SK-030 — Builder floor-isolation visibility
 
@@ -495,10 +495,10 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Todo**
 
-- When a story floor is active, render its slab/walls/openings/stairs and every floor below it; hide all storeys and roof above it.
+- When a story floor is active, render its slab/walls/openings/stairs and every floor below it; upper storeys and the roof are hidden.
 - When the roof is active, render the full building for roof inspection.
 - Keep hidden floors authoritative in the model and restore normal visibility when returning to Architecture mode.
-- Add a multi-storey Builder smoke that selects floor 1, floor 2, and roof and verifies the expected visibility set.
+- Geometry tests verify floor 1, floor 2, and roof visibility; add the equivalent multi-storey Builder desktop smoke.
 
 ### SK-031 — Architecture floor inspection
 
