@@ -34,6 +34,10 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-026 | Expanded site-object library | In progress | SK-013 | Procedural asset placement and persistence smoke |
 | SK-027 | Carport and garage openings | In progress | SK-010 | Opening preview, clearance, persistence, and wall-void tests |
 | SK-028 | Redistributable asset-pack policy | Todo | SK-013, SK-026 | License review and import workflow documentation |
+| SK-029 | Wall corner joinery | Todo | SK-009, SK-011 | Miter/trim geometry tests for straight and angled wall junctions |
+| SK-030 | Builder floor-isolation visibility | Todo | SK-009, SK-010 | Multi-floor Builder visibility smoke |
+| SK-031 | Architecture floor inspection | Todo | SK-007, SK-012 | Per-instance floor visibility and selection smoke |
+| SK-032 | Delete selected scene items | Todo | SK-007, SK-013 | Keyboard deletion, confirmation, undo, and persistence tests |
 
 ## Ticket details
 
@@ -472,6 +476,52 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Document a CC0-first asset policy, retain attribution/license metadata for any bundled non-CC0 item, and keep user-imported assets separate.
 - Evaluate curated sources and only bundle models when their licence permits redistribution in the Windows package.
+
+### SK-029 — Wall corner joinery
+
+**Outcome:** Walls that meet at a shared endpoint form clean, intentional corners rather than overlapping or leaving gaps.
+
+**Todo**
+
+- Detect all wall segments that share a floor-plan corner, including non-orthogonal intersections.
+- Derive paired endpoint trims from the wall centre lines and thicknesses; use a miter for compatible joins and a deterministic butt/trim rule for T-junctions.
+- Apply the same junction result to fallback meshes and Manifold wall-solid requests so the visual result and exported solid agree.
+- Preserve manual wall alignment/type overrides and provide a validation message for degenerate or unresolved junctions.
+- Add golden bounds/volume tests for 90°, acute, obtuse, T, and mixed-thickness corners.
+
+### SK-030 — Builder floor-isolation visibility
+
+**Outcome:** Editing a selected floor in Builder mode never leaves upper storeys or the roof obscuring the work plane.
+
+**Todo**
+
+- When a story floor is active, render its slab/walls/openings/stairs and every floor below it; hide all storeys and roof above it.
+- When the roof is active, render the full building for roof inspection.
+- Keep hidden floors authoritative in the model and restore normal visibility when returning to Architecture mode.
+- Add a multi-storey Builder smoke that selects floor 1, floor 2, and roof and verifies the expected visibility set.
+
+### SK-031 — Architecture floor inspection
+
+**Outcome:** A placed building can be inspected floor-by-floor in the site without opening Builder mode or affecting other instances.
+
+**Todo**
+
+- Add per-selected-building visibility controls in the Architecture Inspector: show all, isolate a floor, hide floors above a selected floor, and restore all.
+- Keep the setting session-only by default so an inspection view does not change the shared building definition or other placements.
+- Ensure picking, outlines, focus, transforms, export visibility, and scene rebuilds respect the chosen inspection visibility.
+- Add smoke coverage for selecting a placed multi-storey building, isolating a floor, and restoring the full building.
+
+### SK-032 — Delete selected scene items
+
+**Outcome:** Selected scene objects can be removed safely and predictably with the keyboard.
+
+**Todo**
+
+- Support Delete and Backspace for selected building instances, asset instances, and terrain layers in Architecture mode.
+- Require confirmation for destructive deletion, naming the selected item and explaining that a building definition is retained while only its placement is removed.
+- Route deletion through the command history so Undo/Redo restores/removes the same instance, and clear selection after a successful deletion.
+- Add a visible Delete action in the Inspector for discoverability and accessible keyboard-equivalent behaviour.
+- Test delete/cancel/undo/save/reopen for buildings, assets, and terrain layers.
 
 ## Release acceptance checklist
 
