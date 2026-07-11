@@ -119,16 +119,25 @@ try {
   if (process.env.SKETCHER_LIVE_TERRAIN === "1") {
     await window.getByRole("button", { name: "Architecture" }).click();
     await window.getByRole("button", { name: "Add terrain layer" }).click();
-    await window.getByPlaceholder("Search Norwegian place…").fill("Oslo");
+    await window.getByPlaceholder("Search Norwegian place...").fill("Oslo");
     await window.getByRole("button", { name: "Search" }).click();
     const firstPlace = window.locator(".search-results button").first();
     await firstPlace.waitFor({ state: "visible", timeout: 15_000 });
     await firstPlace.click();
-    await window.getByLabel("Area size").selectOption("250");
-    await window.getByLabel("Image style").selectOption("map");
-    await window.getByRole("button", { name: "Add flat map image" }).click();
+    const map = window.locator('.map-frame[data-map-ready="true"]');
+    const mapBounds = await map.boundingBox();
+    if (!mapBounds) throw new Error("Map selector has no visible bounds.");
+    for (const [x, y] of [
+      [0.42, 0.58],
+      [0.58, 0.58],
+      [0.52, 0.42],
+    ]) {
+      await map.click({ position: { x: mapBounds.width * x, y: mapBounds.height * y } });
+    }
+    await window.getByText(/^3 points selected/).waitFor({ state: "visible" });
+    await window.getByRole("button", { name: "Import selected map area" }).click();
     await window.locator(".terrain-dialog").waitFor({ state: "hidden", timeout: 60_000 });
-    await window.getByText(/^Map 59\./).waitFor({ state: "visible" });
+    await window.getByText(/^(Map|Satellite) area /).waitFor({ state: "visible" });
     await window.screenshot({ path: path.join(artifacts, "terrain.png") });
   }
 

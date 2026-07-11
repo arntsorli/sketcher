@@ -125,6 +125,10 @@ export const terrainLayerSchema = z.object({
   provider: z.enum(["kartverket", "norge-i-bilder", "local-geotiff", "custom"]),
   attribution: z.string(),
   boundsWgs84: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  clipPolygonWgs84: z
+    .array(z.tuple([z.number(), z.number()]))
+    .min(3)
+    .optional(),
   sourceEpsg: z.string(),
   anchorWgs84: z.tuple([z.number(), z.number()]),
   absoluteAnchorElevation: z.number(),

@@ -66,6 +66,32 @@ describe("project schema", () => {
     expect(parseProjectDocument(project).buildingDefinitions[0]?.openings[0]?.kind).toBe("carport");
   });
 
+  it("persists a clicked polygon map layer", () => {
+    const project = createProject("Map polygon");
+    project.scene.terrainLayers.push({
+      id: "map-layer",
+      name: "Selected map area",
+      provider: "custom",
+      attribution: "Map provider",
+      boundsWgs84: [10, 59, 10.01, 59.01],
+      clipPolygonWgs84: [
+        [10, 59],
+        [10.01, 59],
+        [10.005, 59.01],
+      ],
+      sourceEpsg: "EPSG:4326",
+      anchorWgs84: [10.005, 59.005],
+      absoluteAnchorElevation: 0,
+      verticalOffset: 0,
+      widthMm: 1_000_000,
+      heightMm: 1_000_000,
+      gridSize: [2, 2],
+      elevationsMm: [0, 0, 0, 0],
+      visible: true,
+    });
+    expect(parseProjectDocument(project).scene.terrainLayers[0]?.clipPolygonWgs84).toHaveLength(3);
+  });
+
   it("migrates an unversioned legacy project", () => {
     const migrated = parseProjectDocument({
       id: "legacy",

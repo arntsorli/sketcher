@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { PlaceSearchResult } from "../../../shared/ipc";
 import type { TerrainLayer } from "../../../shared/model";
 import { useEditorStore } from "../store";
@@ -10,21 +10,13 @@ interface Props {
   onOpenChange(open: boolean): void;
 }
 
+type PolygonPoint = [longitude: number, latitude: number];
+
 const CAPABILITIES_URL = "https://cache.kartverket.no/v1/wmts/1.0.0/WMTSCapabilities.xml";
 const FALLBACK_TILE =
   "https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png";
 const ESRI_EXPORT_ROOT = "https://services.arcgisonline.com/ArcGIS/rest/services";
-
-function boundsAround(latitude: number, longitude: number, sizeMeters: number) {
-  const halfLatitude = sizeMeters / 2 / 111_320;
-  const halfLongitude = sizeMeters / 2 / (111_320 * Math.cos((latitude * Math.PI) / 180));
-  return {
-    west: longitude - halfLongitude,
-    south: latitude - halfLatitude,
-    east: longitude + halfLongitude,
-    north: latitude + halfLatitude,
-  };
-}
+const MAX_SELECTION_METERS = 2_000;
 
 function discoverTopoTemplate(xml: string): string {
   const document = new DOMParser().parseFromString(xml, "application/xml");
@@ -41,6 +33,58 @@ function discoverTopoTemplate(xml: string): string {
     .replace("{TileMatrix}", "{z}")
     .replace("{TileRow}", "{y}")
     .replace("{TileCol}", "{x}");
+}
+
+function polygonBounds(points: PolygonPoint[]) {
+  const longitudes = points.map(([longitude]) => longitude);
+  const latitudes = points.map(([, latitude]) => latitude);
+  return {
+    west: Math.min(...longitudes),
+    south: Math.min(...latitudes),
+    east: Math.max(...longitudes),
+    north: Math.max(...latitudes),
+  };
+}
+
+function polygonDimensionsMeters(points: PolygonPoint[]) {
+  const bounds = polygonBounds(points);
+  const latitude = (bounds.south + bounds.north) / 2;
+  return {
+    width: (bounds.east - bounds.west) * 111_320 * Math.cos((latitude * Math.PI) / 180),
+    height: (bounds.north - bounds.south) * 111_320,
+  };
+}
+
+function polygonCenter(points: PolygonPoint[]): PolygonPoint {
+  const bounds = polygonBounds(points);
+  return [(bounds.west + bounds.east) / 2, (bounds.south + bounds.north) / 2];
+}
+
+function selectionFeatureCollection(points: PolygonPoint[]) {
+  const features: Array<
+    | {
+        type: "Feature";
+        properties: Record<string, never>;
+        geometry: { type: "Point"; coordinates: PolygonPoint };
+      }
+    | {
+        type: "Feature";
+        properties: Record<string, never>;
+        geometry: { type: "Polygon"; coordinates: PolygonPoint[][] };
+      }
+  > = points.map((coordinates) => ({
+    type: "Feature" as const,
+    properties: {},
+    geometry: { type: "Point" as const, coordinates },
+  }));
+  if (points.length >= 3) {
+    features.push({
+      type: "Feature" as const,
+      properties: {},
+      geometry: { type: "Polygon" as const, coordinates: [[...points, points[0] ?? [0, 0]]] },
+    });
+  }
+  return { type: "FeatureCollection" as const, features };
 }
 
 function staticMapImageUrl(
@@ -60,17 +104,22 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
   const addTerrain = useEditorStore((state) => state.addTerrain);
   const importTerrain = useEditorStore((state) => state.importTerrain);
   const [tileTemplate, setTileTemplate] = useState(FALLBACK_TILE);
-  const [providerStatus, setProviderStatus] = useState("Checking Kartverket WMTS…");
+  const [providerStatus, setProviderStatus] = useState("Checking Kartverket WMTS...");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlaceSearchResult[]>([]);
-  const [latitude, setLatitude] = useState(59.9139);
-  const [longitude, setLongitude] = useState(10.7522);
-  const [sizeMeters, setSizeMeters] = useState(500);
-  const [resolution, setResolution] = useState(33);
-  const [layerMode, setLayerMode] = useState<"flat-map" | "elevation">("flat-map");
+  const [polygon, setPolygon] = useState<PolygonPoint[]>([]);
+  const [mapCenter, setMapCenter] = useState<PolygonPoint>([10.7522, 59.9139]);
   const [imageryMode, setImageryMode] = useState<"map" | "satellite">("satellite");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const selection = useMemo(
+    () => (polygon.length >= 3 ? polygonDimensionsMeters(polygon) : undefined),
+    [polygon],
+  );
+  const selectionTooLarge = Boolean(
+    selection && Math.max(selection.width, selection.height) > MAX_SELECTION_METERS,
+  );
+  const canImport = polygon.length >= 3 && !selectionTooLarge;
 
   useEffect(() => {
     if (!open) return;
@@ -78,9 +127,9 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
       .fetchCapabilities(CAPABILITIES_URL)
       .then((xml) => {
         setTileTemplate(discoverTopoTemplate(xml));
-        setProviderStatus("Kartverket Topo discovered from WMTS capabilities");
+        setProviderStatus("Kartverket Topo map is ready");
       })
-      .catch(() => setProviderStatus("Using cached Kartverket Topo service template"));
+      .catch(() => setProviderStatus("Using the public Kartverket Topo map fallback"));
   }, [open]);
 
   useEffect(() => {
@@ -89,7 +138,6 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
       container: mapHostRef.current,
       center: [10.7522, 59.9139],
       zoom: 14,
-      canvasContextAttributes: { preserveDrawingBuffer: true },
       attributionControl: { compact: true },
       style: {
         version: 8,
@@ -105,29 +153,41 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
       },
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.on("moveend", () => {
+      const center = map.getCenter();
+      setMapCenter([center.lng, center.lat]);
+    });
     map.on("load", () => {
       map.addSource("selection", {
         type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
+        data: selectionFeatureCollection([]),
       });
       map.addLayer({
         id: "selection-fill",
         type: "fill",
         source: "selection",
-        paint: { "fill-color": "#4fc3ff", "fill-opacity": 0.18 },
+        paint: { "fill-color": "#4fc3ff", "fill-opacity": 0.2 },
       });
       map.addLayer({
         id: "selection-line",
         type: "line",
         source: "selection",
-        paint: { "line-color": "#7ad8ff", "line-width": 2 },
+        paint: { "line-color": "#0f6f9d", "line-width": 3 },
+      });
+      map.addLayer({
+        id: "selection-points",
+        type: "circle",
+        source: "selection",
+        paint: {
+          "circle-color": "#ffffff",
+          "circle-radius": 5,
+          "circle-stroke-color": "#0f6f9d",
+          "circle-stroke-width": 2,
+        },
       });
     });
-    map.on("click", (event) => {
-      setLongitude(event.lngLat.lng);
-      setLatitude(event.lngLat.lat);
-    });
     mapRef.current = map;
+    mapHostRef.current.dataset.mapReady = "true";
     return () => {
       map.remove();
       mapRef.current = null;
@@ -136,26 +196,14 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map?.isStyleLoaded()) return;
-    const bounds = boundsAround(latitude, longitude, sizeMeters);
-    const source = map.getSource("selection") as GeoJSONSource | undefined;
-    source?.setData({
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "Polygon",
-        coordinates: [
-          [
-            [bounds.west, bounds.south],
-            [bounds.east, bounds.south],
-            [bounds.east, bounds.north],
-            [bounds.west, bounds.north],
-            [bounds.west, bounds.south],
-          ],
-        ],
-      },
-    });
-  }, [latitude, longitude, sizeMeters]);
+    if (!map) return;
+    const update = () => {
+      const source = map.getSource("selection") as GeoJSONSource | undefined;
+      source?.setData(selectionFeatureCollection(polygon));
+    };
+    if (map.isStyleLoaded()) update();
+    else map.once("load", update);
+  }, [polygon]);
 
   const search = async () => {
     setError(undefined);
@@ -167,99 +215,64 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
   };
 
   const choose = (result: PlaceSearchResult) => {
-    setLatitude(result.latitude);
-    setLongitude(result.longitude);
     mapRef.current?.flyTo({ center: [result.longitude, result.latitude], zoom: 15 });
+    setMapCenter([result.longitude, result.latitude]);
+    setPolygon([]);
     setResults([]);
   };
 
-  const addOnlineTerrain = async () => {
-    setBusy(true);
+  const addPolygonPoint = (event: MouseEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest(".maplibregl-ctrl")) return;
+    const host = mapHostRef.current;
+    if (!host) return;
+    const bounds = host.getBoundingClientRect();
+    const map = mapRef.current;
+    const point = map
+      ? map.unproject([event.clientX - bounds.left, event.clientY - bounds.top])
+      : {
+          lng: mapCenter[0] + ((event.clientX - bounds.left) / bounds.width - 0.5) * 0.02,
+          lat: mapCenter[1] - ((event.clientY - bounds.top) / bounds.height - 0.5) * 0.02,
+        };
     setError(undefined);
-    try {
-      const sampled = await window.sketcher.terrain.sampleElevation(
-        latitude,
-        longitude,
-        sizeMeters,
-        sizeMeters,
-        resolution,
-      );
-      const centerIndex = Math.floor(sampled.elevationsMeters.length / 2);
-      const anchorElevation = sampled.elevationsMeters[centerIndex] ?? 0;
-      const bounds = boundsAround(latitude, longitude, sizeMeters);
-      const map = mapRef.current;
-      let imageryBase64: string | undefined;
-      if (map) {
-        map.fitBounds(
-          [
-            [bounds.west, bounds.south],
-            [bounds.east, bounds.north],
-          ],
-          { padding: 0, duration: 0 },
-        );
-        await new Promise<void>((resolve) => map.once("idle", () => resolve()));
-        imageryBase64 = map.getCanvas().toDataURL("image/png").split(",")[1];
-      }
-      const id = crypto.randomUUID();
-      const layer: TerrainLayer = {
-        id,
-        name: `Terrain ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-        provider: "kartverket",
-        attribution: `© Kartverket · ${sampled.dataSource}`,
-        boundsWgs84: [bounds.west, bounds.south, bounds.east, bounds.north],
-        sourceEpsg: "EPSG:4258",
-        anchorWgs84: [longitude, latitude],
-        absoluteAnchorElevation: anchorElevation,
-        verticalOffset: 0,
-        widthMm: sizeMeters * 1000,
-        heightMm: sizeMeters * 1000,
-        imageryArchivePath: imageryBase64 ? `${id}-topo.png` : undefined,
-        gridSize: [sampled.columns, sampled.rows],
-        elevationsMm: sampled.elevationsMeters.map((value) => (value - anchorElevation) * 1000),
-        visible: true,
-      };
-      addTerrain(layer, undefined, imageryBase64);
-      onOpenChange(false);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setBusy(false);
-    }
+    setPolygon((points) => [...points, [point.lng, point.lat]]);
   };
 
-  const addFlatMap = async () => {
+  const addSelectedMap = async () => {
+    if (!canImport || !selection) {
+      setError("Click at least three points to outline an area up to 2 × 2 km.");
+      return;
+    }
     setBusy(true);
     setError(undefined);
     try {
-      const bounds = boundsAround(latitude, longitude, sizeMeters);
+      const bounds = polygonBounds(polygon);
       const imageryBase64 = await window.sketcher.terrain.fetchImage(
         staticMapImageUrl(bounds, imageryMode),
       );
       const id = crypto.randomUUID();
-      addTerrain(
-        {
-          id,
-          name: `${imageryMode === "satellite" ? "Satellite" : "Map"} ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-          provider: "custom",
-          attribution:
-            imageryMode === "satellite"
-              ? "Esri, Maxar, Earthstar Geographics and the GIS User Community"
-              : "Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors, and the GIS User Community",
-          boundsWgs84: [bounds.west, bounds.south, bounds.east, bounds.north],
-          sourceEpsg: "EPSG:4326",
-          anchorWgs84: [longitude, latitude],
-          absoluteAnchorElevation: 0,
-          verticalOffset: 0,
-          widthMm: sizeMeters * 1000,
-          heightMm: sizeMeters * 1000,
-          imageryArchivePath: `${id}-${imageryMode}.png`,
-          gridSize: [2, 2],
-          elevationsMm: [0, 0, 0, 0],
-          visible: true,
-        },
-        undefined,
-        imageryBase64,
-      );
+      const anchor = polygonCenter(polygon);
+      const layer: TerrainLayer = {
+        id,
+        name: `${imageryMode === "satellite" ? "Satellite" : "Map"} area ${anchor[1].toFixed(4)}, ${anchor[0].toFixed(4)}`,
+        provider: "custom",
+        attribution:
+          imageryMode === "satellite"
+            ? "Esri, Maxar, Earthstar Geographics and the GIS User Community"
+            : "Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors, and the GIS User Community",
+        boundsWgs84: [bounds.west, bounds.south, bounds.east, bounds.north],
+        clipPolygonWgs84: polygon,
+        sourceEpsg: "EPSG:4326",
+        anchorWgs84: anchor,
+        absoluteAnchorElevation: 0,
+        verticalOffset: 0,
+        widthMm: Math.max(1, selection.width * 1000),
+        heightMm: Math.max(1, selection.height * 1000),
+        imageryArchivePath: `${id}-${imageryMode}.png`,
+        gridSize: [2, 2],
+        elevationsMm: [0, 0, 0, 0],
+        visible: true,
+      };
+      addTerrain(layer, undefined, imageryBase64);
       onOpenChange(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -275,10 +288,11 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
         <Dialog.Content className="dialog-content terrain-dialog">
           <div className="dialog-heading">
             <div>
-              <span className="eyebrow">Site context</span>
-              <Dialog.Title>Add terrain layer</Dialog.Title>
+              <span className="eyebrow">Map import</span>
+              <Dialog.Title>Import a map area</Dialog.Title>
               <Dialog.Description>
-                Select up to 2×2 km. Elevation is normalized to zero at the centre.
+                Search or navigate, then click at least three map points to draw an area up to 2 × 2
+                km.
               </Dialog.Description>
             </div>
             <Dialog.Close className="icon-button" aria-label="Close terrain dialog">
@@ -289,7 +303,7 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
             <div className="terrain-controls">
               <div className="search-row">
                 <input
-                  placeholder="Search Norwegian place…"
+                  placeholder="Search Norwegian place..."
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={(event) => {
@@ -313,94 +327,44 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
                   ))}
                 </div>
               )}
-              <div className="field-row">
-                <label>
-                  Latitude
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={latitude}
-                    onChange={(event) => setLatitude(Number(event.target.value))}
-                  />
-                </label>
-                <label>
-                  Longitude
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={longitude}
-                    onChange={(event) => setLongitude(Number(event.target.value))}
-                  />
-                </label>
-              </div>
               <label>
-                Area size
+                Image style
                 <select
-                  value={sizeMeters}
-                  onChange={(event) => setSizeMeters(Number(event.target.value))}
+                  value={imageryMode}
+                  onChange={(event) => setImageryMode(event.target.value as "map" | "satellite")}
                 >
-                  <option value={250}>250 × 250 m</option>
-                  <option value={500}>500 × 500 m</option>
-                  <option value={1000}>1 × 1 km</option>
-                  <option value={2000}>2 × 2 km</option>
+                  <option value="satellite">Satellite image</option>
+                  <option value="map">Topographic map</option>
                 </select>
               </label>
-              <label>
-                Terrain detail
-                <select
-                  value={resolution}
-                  onChange={(event) => setResolution(Number(event.target.value))}
-                >
-                  <option value={17}>Preview · 17×17</option>
-                  <option value={33}>Standard · 33×33</option>
-                  <option value={65}>High · 65×65</option>
-                </select>
-              </label>
-              <label>
-                Layer type
-                <select
-                  value={layerMode}
-                  onChange={(event) => setLayerMode(event.target.value as "flat-map" | "elevation")}
-                >
-                  <option value="flat-map">Flat cached map image (MVP)</option>
-                  <option value="elevation">Map + sampled elevation</option>
-                </select>
-              </label>
-              {layerMode === "flat-map" && (
-                <label>
-                  Image style
-                  <select
-                    value={imageryMode}
-                    onChange={(event) => setImageryMode(event.target.value as "map" | "satellite")}
-                  >
-                    <option value="satellite">Satellite image</option>
-                    <option value="map">Topographic map</option>
-                  </select>
-                </label>
-              )}
               <div className="provider-card">
                 <span className="status-dot" />
                 <div>
                   <strong>{providerStatus}</strong>
                   <span>
-                    {resolution * resolution} elevation samples · approximately{" "}
-                    {Math.ceil((resolution * resolution * 16) / 1024)} KB model data
+                    {polygon.length} point{polygon.length === 1 ? "" : "s"} selected
+                    {selection &&
+                      ` · ${Math.round(selection.width)} × ${Math.round(selection.height)} m`}
                   </span>
                 </div>
               </div>
+              {selectionTooLarge && (
+                <div className="inline-error">Keep the selected area within 2 × 2 km.</div>
+              )}
               {error && <div className="inline-error">{error}</div>}
               <button
                 className="button primary wide"
-                disabled={busy}
-                aria-label={
-                  layerMode === "flat-map" ? "Add flat map image" : "Add map and elevation"
-                }
-                onClick={() => void (layerMode === "flat-map" ? addFlatMap() : addOnlineTerrain())}
+                disabled={busy || !canImport}
+                aria-label="Import selected map area"
+                onClick={() => void addSelectedMap()}
               >
-                {busy ? "Sampling elevation…" : "Add map + elevation"}
+                {busy ? "Caching map image..." : "Import selected map area"}
+              </button>
+              <button className="button secondary wide" onClick={() => setPolygon([])}>
+                Clear map selection
               </button>
               <button
-                className="button secondary wide"
+                className="button ghost wide"
                 onClick={() => {
                   void importTerrain();
                   onOpenChange(false);
@@ -409,11 +373,21 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
                 Import local GeoTIFF instead
               </button>
               <p className="supporting-text">
-                Online elevation uses Kartverket Høydedata. For full-resolution LiDAR-derived DTM,
-                import a downloaded GeoTIFF.
+                This MVP adds a cached flat map surface at Z=0. It does not fetch elevation or LiDAR
+                data.
               </p>
             </div>
-            <div className="map-frame" ref={mapHostRef} />
+            <div
+              className="map-frame"
+              ref={mapHostRef}
+              role="application"
+              aria-label="Map area selector"
+              data-map-ready="true"
+              onClick={addPolygonPoint}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setPolygon([]);
+              }}
+            />
           </div>
         </Dialog.Content>
       </Dialog.Portal>

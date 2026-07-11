@@ -443,10 +443,11 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **In progress**
 
-- Keep the MapLibre selector mounted while coordinates and AOI settings change.
-- Offer cached Esri topographic-map and satellite-image choices, fetched through a narrow Electron IPC allow-list rather than a CORS-sensitive canvas capture.
-- Add the image plane immediately at Z=0 with source bounds, attribution, and embedded project archive data. The live smoke now verifies the flat-map creation path.
-- Remaining: offline-restart E2E, AOI drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and high-resolution orthophoto remain follow-on work rather than prerequisites.
+- Replaced coordinate and fixed-size AOI setup with a map-first flow: search for a Norwegian place or pan and zoom, then click three or more vertices to select the import polygon.
+- Render the clicked vertices and closed polygon directly on the MapLibre map; reject selections wider or taller than 2 km.
+- Cache an Esri satellite image or topographic map through the narrow Electron IPC allow-list, then add it immediately as a clipped Z=0 scene surface with source bounds, attribution, and embedded project data.
+- Unit coverage persists the clicked polygon and verifies its clipped render mesh. The live Electron smoke creates a map layer by searching, clicking three map points, and importing it.
+- Remaining: offline-restart E2E, editable AOI vertices/drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and high-resolution orthophoto remain follow-on work rather than prerequisites.
 
 ### SK-026 — Expanded site-object library
 

@@ -589,15 +589,45 @@ export function createBuiltinAsset(definition: AssetDefinition): THREE.Group {
 
 export function createTerrainMesh(layer: TerrainLayer, imageryBase64?: string): THREE.Mesh {
   const [columns, rows] = layer.gridSize;
-  const geometry = new THREE.PlaneGeometry(
-    layer.widthMm * MM_TO_M,
-    layer.heightMm * MM_TO_M,
-    Math.max(1, columns - 1),
-    Math.max(1, rows - 1),
-  );
+  const [west, south, east, north] = layer.boundsWgs84;
+  const geometry = layer.clipPolygonWgs84
+    ? (() => {
+        const shape = new THREE.Shape();
+        layer.clipPolygonWgs84.forEach(([longitude, latitude], index) => {
+          const x =
+            ((longitude - west) / Math.max(Number.EPSILON, east - west) - 0.5) *
+            layer.widthMm *
+            MM_TO_M;
+          const y =
+            ((latitude - south) / Math.max(Number.EPSILON, north - south) - 0.5) *
+            layer.heightMm *
+            MM_TO_M;
+          if (index === 0) shape.moveTo(x, y);
+          else shape.lineTo(x, y);
+        });
+        shape.closePath();
+        return new THREE.ShapeGeometry(shape);
+      })()
+    : new THREE.PlaneGeometry(
+        layer.widthMm * MM_TO_M,
+        layer.heightMm * MM_TO_M,
+        Math.max(1, columns - 1),
+        Math.max(1, rows - 1),
+      );
   const positions = geometry.getAttribute("position");
+  if (layer.clipPolygonWgs84) {
+    const uvs = geometry.getAttribute("uv");
+    for (let index = 0; index < positions.count; index += 1) {
+      uvs.setXY(
+        index,
+        positions.getX(index) / (layer.widthMm * MM_TO_M) + 0.5,
+        positions.getY(index) / (layer.heightMm * MM_TO_M) + 0.5,
+      );
+    }
+    uvs.needsUpdate = true;
+  }
   const elevations = layer.elevationsMm;
-  if (elevations) {
+  if (elevations && !layer.clipPolygonWgs84) {
     for (let index = 0; index < Math.min(positions.count, elevations.length); index += 1) {
       positions.setZ(index, ((elevations[index] ?? 0) + layer.verticalOffset) * MM_TO_M);
     }
@@ -612,6 +642,9 @@ export function createTerrainMesh(layer: TerrainLayer, imageryBase64?: string): 
       })
     : materials.terrain;
   const mesh = new THREE.Mesh(geometry, terrainMaterial);
+  if (layer.clipPolygonWgs84 || !elevations) {
+    mesh.position.z = layer.verticalOffset * MM_TO_M;
+  }
   mesh.receiveShadow = true;
   mesh.userData = { entityType: "terrain", entityId: layer.id };
   return mesh;

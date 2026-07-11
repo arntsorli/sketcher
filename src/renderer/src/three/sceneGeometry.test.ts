@@ -1,7 +1,7 @@
 import { Box3, type Object3D } from "three";
 import { describe, expect, it } from "vitest";
-import type { BuildingDefinition, Vec2 } from "../../../shared/model";
-import { calculateWallMiterProfile, createBuildingGroup } from "./sceneGeometry";
+import type { BuildingDefinition, TerrainLayer, Vec2 } from "../../../shared/model";
+import { calculateWallMiterProfile, createBuildingGroup, createTerrainMesh } from "./sceneGeometry";
 
 function buildingFor(footprint: Vec2[]): BuildingDefinition {
   return {
@@ -186,5 +186,39 @@ describe("building envelope geometry", () => {
     expect(countByType(upperView, "roof")).toBe(0);
     expect(countByType(roofView, "floor")).toBe(2);
     expect(countByType(roofView, "roof")).toBe(1);
+  });
+
+  it("renders a clicked map polygon as a clipped terrain surface", () => {
+    const layer: TerrainLayer = {
+      id: "terrain",
+      name: "Triangle",
+      provider: "custom",
+      attribution: "Map provider",
+      boundsWgs84: [10, 59, 10.01, 59.01],
+      clipPolygonWgs84: [
+        [10, 59],
+        [10.01, 59],
+        [10.005, 59.01],
+      ],
+      sourceEpsg: "EPSG:4326",
+      anchorWgs84: [10.005, 59.005],
+      absoluteAnchorElevation: 0,
+      verticalOffset: 125,
+      widthMm: 1_000_000,
+      heightMm: 1_000_000,
+      gridSize: [2, 2],
+      elevationsMm: [0, 0, 0, 0],
+      visible: true,
+    };
+    const mesh = createTerrainMesh(layer);
+    expect(mesh.geometry.type).toBe("ShapeGeometry");
+    expect(mesh.position.z).toBeCloseTo(0.125);
+    const uvs = mesh.geometry.getAttribute("uv");
+    const uCoordinates = Array.from({ length: uvs.count }, (_, index) => uvs.getX(index));
+    const vCoordinates = Array.from({ length: uvs.count }, (_, index) => uvs.getY(index));
+    expect(Math.min(...uCoordinates)).toBeCloseTo(0);
+    expect(Math.max(...uCoordinates)).toBeCloseTo(1);
+    expect(Math.min(...vCoordinates)).toBeCloseTo(0);
+    expect(Math.max(...vCoordinates)).toBeCloseTo(1);
   });
 });
