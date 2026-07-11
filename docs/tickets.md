@@ -246,7 +246,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Buildings now enter a translucent grid-snapped pointer preview and are placed by click; Escape cancels without mutating the scene.
 - Generate definition thumbnails and expose rename/delete with dependency confirmation.
-- Add an automated shared-two-instances/Make-Unique propagation test.
+- Desktop E2E places two shared instances, runs Make Unique on the second, and confirms the cloned definition is visible before save/reopen. Add a definition-edit propagation/isolation assertion next.
 
 ### SK-013 — Scene objects and GLB interchange
 
@@ -405,7 +405,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Remaining coverage**
 
-- The desktop E2E now also places two shared building instances and a hedge through visible pointer previews, saves, reopens, and confirms the persisted scene counts.
+- The desktop E2E now also places two shared building instances, runs Make Unique on one, adds a hedge through a visible pointer preview, saves, reopens, and confirms the persisted scene counts.
 - Add E2E journeys for multi-room walls, doors/windows, stairs, roof persistence, Make Unique propagation, asset GLB interchange, delete/recovery, terrain offline reopening, and corrupt-file/error handling.
 - Add visual assertions for snap glyphs, dimension readability, screen scaling, and selected-object outlines.
 

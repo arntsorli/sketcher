@@ -81,6 +81,8 @@ try {
     .locator('.scene-host[data-placement-preview="place-building"]')
     .waitFor({ state: "visible" });
   await canvas.click({ position: { x: bounds.width * 0.62, y: bounds.height * 0.5 } });
+  await page.getByRole("button", { name: "Make unique" }).click();
+  await page.getByText("Building 1 copy", { exact: true }).first().waitFor({ state: "visible" });
   await page.getByText("2 buildings · 0 objects").waitFor({ state: "visible" });
 
   await page.getByRole("button", { name: "Hedge segment" }).click();
@@ -103,7 +105,7 @@ try {
   );
   if (rendererHasNode) throw new Error("Node globals leaked into the renderer.");
   console.log(
-    "E2E passed: direct foundation, Builder edit, shared building and hedge placement preview, save, and reopen.",
+    "E2E passed: direct foundation, Builder edit, shared placement, Make Unique, hedge preview, save, and reopen.",
   );
 } finally {
   await app.close();
