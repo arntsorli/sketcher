@@ -331,6 +331,7 @@ export function createBuiltinAsset(definition: AssetDefinition): THREE.Group {
     group.add(stem, crown);
   } else if (definition.kind === "birch-tree") {
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.2, 5.5, 10), material(0xdfdfd5));
+    stem.rotation.x = Math.PI / 2;
     stem.position.z = 2.75;
     const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(1.7, 1), material(0x6d9251));
     crown.position.z = 5.7;
@@ -362,6 +363,7 @@ export function createBuiltinAsset(definition: AssetDefinition): THREE.Group {
     group.add(shed, roof);
   } else if (definition.kind === "flag-pole") {
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.075, 7, 12), material(0xc9d0d4));
+    pole.rotation.x = Math.PI / 2;
     pole.position.z = 3.5;
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), material(0xc9444a));
     flag.position.set(0.72, 0, 6.35);
