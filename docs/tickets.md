@@ -38,6 +38,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-030 | Builder floor-isolation visibility | Todo | SK-009, SK-010 | Multi-floor Builder visibility smoke |
 | SK-031 | Architecture floor inspection | Todo | SK-007, SK-012 | Per-instance floor visibility and selection smoke |
 | SK-032 | Delete selected scene items | Todo | SK-007, SK-013 | Keyboard deletion, confirmation, undo, and persistence tests |
+| SK-033 | Primitives, polygon faces, and extrusion | In progress | SK-007, SK-013 | Persisted polygon/extrusion geometry and desktop modelling smoke |
 
 ## Ticket details
 
@@ -523,6 +524,18 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Route deletion through the command history so Undo/Redo restores/removes the same instance, and clear selection after a successful deletion.
 - Add a visible Delete action in the Inspector for discoverability and accessible keyboard-equivalent behaviour.
 - Test delete/cancel/undo/save/reopen for buildings, assets, and terrain layers.
+
+### SK-033 - Primitives, polygon faces, and extrusion
+
+**Outcome:** Architecture mode supports simple massing geometry without importing an external model.
+
+**In progress**
+
+- Added project-library primitives: Cube, Plane, Sphere, Cylinder, and Cone. They use the standard placement preview, grid placement, selection, transforms, undo/redo, and persistence paths.
+- Added the Polygon Face tool. Click a valid closed outline on the XY grid, then create a saved scene face; Backspace removes a point, Enter completes the face, and Escape cancels the draft.
+- A selected generated face exposes an Extrusion height in millimetres. Zero remains a face; a positive value creates a solid that extrudes along +Z.
+- Polygon profiles are stored relative to their scene instance, so translating, rotating, and scaling behaves like other scene objects. Unit coverage verifies persistence and solid bounds; the desktop smoke creates and extrudes a face, then places a Cube.
+- Remaining: face-vertex editing, holes/multiple loops, arbitrary face planes, bevel/taper, extrusion manipulator, material controls, and mesh Boolean operations.
 
 ## Release acceptance checklist
 

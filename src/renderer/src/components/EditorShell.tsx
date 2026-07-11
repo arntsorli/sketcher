@@ -47,6 +47,8 @@ export function EditorShell({ onSettings }: Props) {
   const importAsset = useEditorStore((state) => state.importAsset);
   const finishFoundation = useEditorStore((state) => state.finishFoundation);
   const removeLastFoundationPoint = useEditorStore((state) => state.removeLastFoundationPoint);
+  const finishPolygonFace = useEditorStore((state) => state.finishPolygonFace);
+  const removeLastPolygonPoint = useEditorStore((state) => state.removeLastPolygonPoint);
   const addRoof = useEditorStore((state) => state.addRoof);
   const save = useEditorStore((state) => state.save);
   const closeProject = useEditorStore((state) => state.closeProject);
@@ -56,7 +58,8 @@ export function EditorShell({ onSettings }: Props) {
   const [terrainOpen, setTerrainOpen] = useState(false);
 
   const activeBuilding = project?.buildingDefinitions.find((item) => item.id === activeBuildingId);
-  const displayedPoints = activeBuilding?.footprint ?? draft.points;
+  const displayedPoints =
+    tool === "polygon" ? draft.points : (activeBuilding?.footprint ?? draft.points);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -225,6 +228,25 @@ export function EditorShell({ onSettings }: Props) {
                 <small>Compose the site</small>
               </div>
               <ToolButton tool="select" label="Select" hint="G · R · S" />
+              <ToolButton tool="polygon" label="Polygon face" hint="Click a closed outline" />
+              {tool === "polygon" && (
+                <>
+                  <button
+                    className="button primary wide small"
+                    disabled={draft.points.length < 3}
+                    onClick={finishPolygonFace}
+                  >
+                    Create face
+                  </button>
+                  <button
+                    className="button secondary wide small"
+                    disabled={draft.points.length === 0}
+                    onClick={removeLastPolygonPoint}
+                  >
+                    Undo last point
+                  </button>
+                </>
+              )}
               <button className="tool-button accent" onClick={startNewBuilding}>
                 <span>+</span>
                 <div>
@@ -298,7 +320,7 @@ export function EditorShell({ onSettings }: Props) {
 
       <footer className="status-bar">
         <span>{status}</span>
-        {mode === "builder" && (
+        {(mode === "builder" || tool === "polygon") && (
           <>
             <span>{tool}</span>
             <span>{displayedPoints.length} points</span>

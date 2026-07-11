@@ -265,6 +265,7 @@ export function SceneCanvas() {
   const draft = useEditorStore((state) => state.draft);
   const setDraft = useEditorStore((state) => state.setDraft);
   const addFoundationPoint = useEditorStore((state) => state.addFoundationPoint);
+  const addPolygonPoint = useEditorStore((state) => state.addPolygonPoint);
   const addWallSegment = useEditorStore((state) => state.addWallSegment);
   const addOpening = useEditorStore((state) => state.addOpening);
   const addStair = useEditorStore((state) => state.addStair);
@@ -595,7 +596,7 @@ export function SceneCanvas() {
 
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine || !project) return;
     engine.transform.detach();
     engine.outline.selectedObjects = [];
     if (!selection) return;
@@ -628,7 +629,7 @@ export function SceneCanvas() {
       engine.transform.addEventListener("mouseUp", onMouseUp);
       return () => engine.transform.removeEventListener("mouseUp", onMouseUp);
     }
-  }, [selection, mode, commit]);
+  }, [selection, mode, project, commit]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -644,7 +645,7 @@ export function SceneCanvas() {
     if (draft.wallStart) points.push(draft.wallStart);
     if (draft.hover && (draft.points.length > 0 || draft.wallStart)) points.push(draft.hover);
     if (points.length > 0) {
-      if (tool === "foundation" && points.length >= 3) {
+      if ((tool === "foundation" || tool === "polygon") && points.length >= 3) {
         const shape = new THREE.Shape(
           points.map((point) => new THREE.Vector2(point.x / 1000, point.y / 1000)),
         );
@@ -672,7 +673,7 @@ export function SceneCanvas() {
       line.renderOrder = 999;
       engine.draft.add(line);
       const closureTarget =
-        tool === "foundation" &&
+        (tool === "foundation" || tool === "polygon") &&
         draft.points.length >= 3 &&
         draft.points[0] &&
         draft.hover &&
@@ -690,7 +691,7 @@ export function SceneCanvas() {
         marker.renderOrder = 1000;
         engine.draft.add(marker);
       }
-      if (tool === "foundation" && draft.hover) {
+      if ((tool === "foundation" || tool === "polygon") && draft.hover) {
         const gridTarget = new THREE.Mesh(
           new THREE.RingGeometry(0.07, 0.1, 4),
           new THREE.MeshBasicMaterial({
@@ -705,7 +706,7 @@ export function SceneCanvas() {
         engine.draft.add(gridTarget);
       }
     }
-    if (tool === "foundation" && draft.hover && points.length === 0) {
+    if ((tool === "foundation" || tool === "polygon") && draft.hover && points.length === 0) {
       const gridTarget = new THREE.Mesh(
         new THREE.RingGeometry(0.07, 0.1, 4),
         new THREE.MeshBasicMaterial({ color: 0xf7a735, depthTest: false, side: THREE.DoubleSide }),
@@ -852,7 +853,7 @@ export function SceneCanvas() {
         point &&
         ((mode === "builder" &&
           ["foundation", "wall", "door", "window", "carport", "stair"].includes(tool)) ||
-          (mode === "architecture" && ["place-building", "place-asset"].includes(tool)))
+          (mode === "architecture" && ["place-building", "place-asset", "polygon"].includes(tool)))
       ) {
         setDraft({ hover: point });
       }
@@ -880,6 +881,10 @@ export function SceneCanvas() {
         return;
       }
       const current = useEditorStore.getState();
+      if (tool === "polygon") {
+        addPolygonPoint(point);
+        return;
+      }
       if (tool === "place-building" && current.placementDefinitionId) {
         placeBuilding(current.placementDefinitionId, point);
         return;
@@ -921,6 +926,7 @@ export function SceneCanvas() {
     draft,
     setDraft,
     addFoundationPoint,
+    addPolygonPoint,
     addWallSegment,
     addOpening,
     addStair,
@@ -963,6 +969,20 @@ export function SceneCanvas() {
         event.preventDefault();
         state.setTool("select");
         state.setStatus("Placement cancelled");
+        return;
+      }
+      if (state.mode === "architecture" && state.tool === "polygon") {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          state.setTool("select");
+          state.setStatus("Polygon face cancelled");
+        } else if (event.key === "Backspace") {
+          event.preventDefault();
+          state.removeLastPolygonPoint();
+        } else if (event.key === "Enter" && state.draft.points.length >= 3) {
+          event.preventDefault();
+          state.finishPolygonFace();
+        }
         return;
       }
       if (state.mode !== "builder" || !["foundation", "wall"].includes(state.tool)) return;

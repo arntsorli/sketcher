@@ -505,7 +505,20 @@ export function createBuiltinAsset(definition: AssetDefinition): THREE.Group {
   const darkGreen = material(0x315f42);
   const blue = material(0x42627f);
   const skin = material(0xd0a47c);
-  if (definition.kind === "car") {
+  if (definition.kind === "polygon-face" && definition.polygon) {
+    const shape = new THREE.Shape();
+    definition.polygon.points.forEach((point, index) => {
+      if (index === 0) shape.moveTo(point.x * MM_TO_M, point.y * MM_TO_M);
+      else shape.lineTo(point.x * MM_TO_M, point.y * MM_TO_M);
+    });
+    shape.closePath();
+    const height = definition.polygon.extrusionHeight * MM_TO_M;
+    const geometry =
+      height > 0
+        ? new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
+        : new THREE.ShapeGeometry(shape);
+    group.add(new THREE.Mesh(geometry, material(0x9b7653)));
+  } else if (definition.kind === "car") {
     const body = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.8, 1.1), blue);
     body.position.z = 0.75;
     const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.55, 0.75), material(0x9fb5c2));
@@ -573,6 +586,25 @@ export function createBuiltinAsset(definition: AssetDefinition): THREE.Group {
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), skin);
     head.position.z = 1.75;
     group.add(body, head);
+  } else if (definition.kind === "plane") {
+    const plane = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 0.04), material(0x8094a2));
+    plane.position.z = 0.02;
+    group.add(plane);
+  } else if (definition.kind === "sphere") {
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.6, 24, 16), material(0x7f91ac));
+    sphere.position.z = 0.6;
+    group.add(sphere);
+  } else if (definition.kind === "cylinder") {
+    const cylinder = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.5, 1.2, 24),
+      material(0x7f91ac),
+    );
+    cylinder.position.z = 0.6;
+    group.add(cylinder);
+  } else if (definition.kind === "cone") {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.65, 1.4, 24), material(0x7f91ac));
+    cone.position.z = 0.7;
+    group.add(cone);
   } else {
     const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material(0xa78b63));
     box.position.z = 0.5;
@@ -686,7 +718,7 @@ export function createProjectContent(
   }
   for (const instance of project.scene.assetInstances.filter((item) => item.visible)) {
     const definition = project.assetDefinitions.find((item) => item.id === instance.definitionId);
-    if (definition?.source !== "builtin") continue;
+    if (definition?.source !== "builtin" && definition?.source !== "generated") continue;
     const group = createBuiltinAsset(definition);
     group.position.set(
       instance.transform.position.x * MM_TO_M,

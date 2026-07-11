@@ -6,7 +6,44 @@ describe("project schema", () => {
     const project = createProject("Round trip");
     expect(parseProjectDocument(JSON.parse(JSON.stringify(project)))).toEqual(project);
     expect(project.assetDefinitions.map((asset) => asset.kind)).toEqual(
-      expect.arrayContaining(["hedge-segment", "fence-segment", "garbage-shed", "flag-pole"]),
+      expect.arrayContaining([
+        "hedge-segment",
+        "fence-segment",
+        "garbage-shed",
+        "flag-pole",
+        "plane",
+        "sphere",
+        "cylinder",
+        "cone",
+      ]),
+    );
+  });
+
+  it("persists a generated polygon face and extrusion height", () => {
+    const project = createProject("Extruded face");
+    project.assetDefinitions.push({
+      id: "face",
+      name: "Face",
+      source: "generated",
+      kind: "polygon-face",
+      polygon: {
+        points: [
+          { x: 0, y: 0 },
+          { x: 1000, y: 0 },
+          { x: 0, y: 1000 },
+        ],
+        extrusionHeight: 2700,
+      },
+    });
+    project.scene.assetInstances.push({
+      id: "face-instance",
+      definitionId: "face",
+      name: "Face",
+      transform: { position: { x: 500, y: 750, z: 0 }, rotationZ: 0, scale: 1 },
+      visible: true,
+    });
+    expect(parseProjectDocument(project).assetDefinitions.at(-1)?.polygon?.extrusionHeight).toBe(
+      2700,
     );
   });
 

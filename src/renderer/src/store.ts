@@ -26,6 +26,7 @@ export type EditorTool =
   | "carport"
   | "stair"
   | "roof"
+  | "polygon"
   | "place-building"
   | "place-asset"
   | "terrain";
@@ -89,6 +90,10 @@ interface EditorState {
   addFoundationPoint(point: Vec2): void;
   removeLastFoundationPoint(): void;
   finishFoundation(): void;
+  addPolygonPoint(point: Vec2): void;
+  removeLastPolygonPoint(): void;
+  finishPolygonFace(): void;
+  extrudeSelectedPolygon(heightMm: number): void;
   addWallSegment(start: Vec2, end: Vec2): void;
   addOpening(kind: "door" | "window" | "carport", point: Vec2): void;
   addStair(point: Vec2): void;
@@ -407,6 +412,104 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       activeFloorId: building.floors[0]?.id,
       tool: "wall",
       draft: { points: [], axisAngle: state.draft.axisAngle, numericInput: "" },
+    });
+  },
+
+  addPolygonPoint(point) {
+    const state = get();
+    const first = state.draft.points[0];
+    if (first && state.draft.points.length >= 3 && distance(first, point) < 1) {
+      get().finishPolygonFace();
+      return;
+    }
+    const error = validateNextPolygonPoint(state.draft.points, point);
+    if (error) {
+      set({ error, status: "Polygon point rejected" });
+      return;
+    }
+    set({
+      draft: {
+        ...state.draft,
+        points: [...state.draft.points, point],
+        hover: undefined,
+        numericInput: "",
+      },
+    });
+  },
+
+  removeLastPolygonPoint() {
+    const state = get();
+    if (state.draft.points.length === 0) return;
+    set({
+      draft: {
+        ...state.draft,
+        points: state.draft.points.slice(0, -1),
+        hover: undefined,
+        numericInput: "",
+      },
+      status: "Last polygon point removed",
+      error: undefined,
+    });
+  },
+
+  finishPolygonFace() {
+    const state = get();
+    const error = validatePolygon(state.draft.points);
+    if (error) {
+      set({ error, status: "Polygon face needs a valid closed outline" });
+      return;
+    }
+    const origin = state.draft.points[0];
+    if (!origin) return;
+    const definitionId = crypto.randomUUID();
+    const instanceId = crypto.randomUUID();
+    const index =
+      (state.project?.assetDefinitions.filter((item) => item.kind === "polygon-face").length ?? 0) +
+      1;
+    get().commit("Polygon face created", (project) => {
+      project.assetDefinitions.push({
+        id: definitionId,
+        name: `Polygon face ${index}`,
+        source: "generated",
+        kind: "polygon-face",
+        polygon: {
+          points: state.draft.points.map((point) => ({
+            x: point.x - origin.x,
+            y: point.y - origin.y,
+          })),
+          extrusionHeight: 0,
+        },
+      });
+      project.scene.assetInstances.push({
+        id: instanceId,
+        definitionId,
+        name: `Polygon face ${index}`,
+        transform: { position: { x: origin.x, y: origin.y, z: 0 }, rotationZ: 0, scale: 1 },
+        visible: true,
+      });
+    });
+    set({
+      selection: { type: "asset", id: instanceId },
+      tool: "select",
+      draft: { points: [], axisAngle: state.draft.axisAngle, numericInput: "" },
+    });
+  },
+
+  extrudeSelectedPolygon(heightMm) {
+    const state = get();
+    if (state.selection?.type !== "asset") return;
+    const instance = state.project?.scene.assetInstances.find(
+      (item) => item.id === state.selection?.id,
+    );
+    const definition = state.project?.assetDefinitions.find(
+      (item) => item.id === instance?.definitionId,
+    );
+    if (!instance || definition?.kind !== "polygon-face" || !definition.polygon) return;
+    get().commit("Polygon face extruded", (project) => {
+      const target = project.assetDefinitions.find((item) => item.id === definition.id);
+      if (target?.kind === "polygon-face" && target.polygon) {
+        target.polygon.extrusionHeight = Math.max(0, heightMm);
+      }
     });
   },
 

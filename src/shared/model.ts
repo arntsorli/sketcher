@@ -93,7 +93,7 @@ export const buildingInstanceSchema = z.object({
 export const assetDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
-  source: z.enum(["builtin", "imported"]),
+  source: z.enum(["builtin", "imported", "generated"]),
   kind: z.enum([
     "car",
     "deciduous-tree",
@@ -105,10 +105,21 @@ export const assetDefinitionSchema = z.object({
     "flag-pole",
     "person",
     "box",
+    "plane",
+    "sphere",
+    "cylinder",
+    "cone",
+    "polygon-face",
     "glb",
   ]),
   archivePath: z.string().optional(),
   contentHash: z.string().optional(),
+  polygon: z
+    .object({
+      points: z.array(vec2Schema).min(3),
+      extrusionHeight: z.number().nonnegative(),
+    })
+    .optional(),
 });
 
 export const assetInstanceSchema = z.object({
@@ -289,7 +300,11 @@ export const builtinAssets: AssetDefinition[] = [
   { id: "builtin-garbage-shed", name: "Garbage shed", source: "builtin", kind: "garbage-shed" },
   { id: "builtin-flag-pole", name: "Flag pole", source: "builtin", kind: "flag-pole" },
   { id: "builtin-person", name: "Person", source: "builtin", kind: "person" },
-  { id: "builtin-box", name: "Generic box", source: "builtin", kind: "box" },
+  { id: "builtin-box", name: "Cube", source: "builtin", kind: "box" },
+  { id: "builtin-plane", name: "Plane", source: "builtin", kind: "plane" },
+  { id: "builtin-sphere", name: "Sphere", source: "builtin", kind: "sphere" },
+  { id: "builtin-cylinder", name: "Cylinder", source: "builtin", kind: "cylinder" },
+  { id: "builtin-cone", name: "Cone", source: "builtin", kind: "cone" },
 ];
 
 export function createProject(name = "Untitled"): ProjectDocument {

@@ -688,6 +688,7 @@ function ArchitectureInspector({ project }: { project: ProjectDocument }) {
   const makeUnique = useEditorStore((state) => state.makeSelectedBuildingUnique);
   const editBuilding = useEditorStore((state) => state.editBuilding);
   const commit = useEditorStore((state) => state.commit);
+  const extrudeSelectedPolygon = useEditorStore((state) => state.extrudeSelectedPolygon);
   const selectedBuilding =
     selection?.type === "building"
       ? project.scene.buildingInstances.find((item) => item.id === selection.id)
@@ -696,6 +697,9 @@ function ArchitectureInspector({ project }: { project: ProjectDocument }) {
     selection?.type === "asset"
       ? project.scene.assetInstances.find((item) => item.id === selection.id)
       : undefined;
+  const selectedAssetDefinition = selectedAsset
+    ? project.assetDefinitions.find((item) => item.id === selectedAsset.definitionId)
+    : undefined;
   const selectedTerrain =
     selection?.type === "terrain"
       ? project.scene.terrainLayers.find((item) => item.id === selection.id)
@@ -797,6 +801,25 @@ function ArchitectureInspector({ project }: { project: ProjectDocument }) {
         <div className="selection-properties">
           <span className="eyebrow">Selected object</span>
           <h3>{selectedAsset.name}</h3>
+          {selectedAssetDefinition?.kind === "polygon-face" && selectedAssetDefinition.polygon && (
+            <label>
+              Extrusion height (mm)
+              <input
+                type="number"
+                min={0}
+                key={`${selectedAssetDefinition.id}-${selectedAssetDefinition.polygon.extrusionHeight}`}
+                defaultValue={selectedAssetDefinition.polygon.extrusionHeight}
+                onBlur={(event) =>
+                  extrudeSelectedPolygon(
+                    numberOnBlur(
+                      event.target.value,
+                      selectedAssetDefinition.polygon?.extrusionHeight ?? 0,
+                    ),
+                  )
+                }
+              />
+            </label>
+          )}
           <p className="supporting-text">G translate · R rotate · S uniform scale · F focus</p>
         </div>
       )}

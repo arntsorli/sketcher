@@ -1,7 +1,17 @@
 import { Box3, type Object3D } from "three";
 import { describe, expect, it } from "vitest";
-import type { BuildingDefinition, TerrainLayer, Vec2 } from "../../../shared/model";
-import { calculateWallMiterProfile, createBuildingGroup, createTerrainMesh } from "./sceneGeometry";
+import type {
+  AssetDefinition,
+  BuildingDefinition,
+  TerrainLayer,
+  Vec2,
+} from "../../../shared/model";
+import {
+  calculateWallMiterProfile,
+  createBuildingGroup,
+  createBuiltinAsset,
+  createTerrainMesh,
+} from "./sceneGeometry";
 
 function buildingFor(footprint: Vec2[]): BuildingDefinition {
   return {
@@ -220,5 +230,27 @@ describe("building envelope geometry", () => {
     expect(Math.max(...uCoordinates)).toBeCloseTo(1);
     expect(Math.min(...vCoordinates)).toBeCloseTo(0);
     expect(Math.max(...vCoordinates)).toBeCloseTo(1);
+  });
+
+  it("renders a generated polygon face as an editable vertical extrusion", () => {
+    const face: AssetDefinition = {
+      id: "face",
+      name: "Extruded face",
+      source: "generated",
+      kind: "polygon-face",
+      polygon: {
+        points: [
+          { x: 0, y: 0 },
+          { x: 3000, y: 0 },
+          { x: 3000, y: 2000 },
+          { x: 0, y: 2000 },
+        ],
+        extrusionHeight: 2500,
+      },
+    };
+    const bounds = new Box3().setFromObject(createBuiltinAsset(face));
+    expect(bounds.max.z).toBeCloseTo(2.5);
+    expect(bounds.max.x - bounds.min.x).toBeCloseTo(3);
+    expect(bounds.max.y - bounds.min.y).toBeCloseTo(2);
   });
 });

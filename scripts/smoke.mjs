@@ -116,8 +116,26 @@ try {
   await window.getByText("Gable properties").waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "gable-roof.png") });
 
+  await window.getByRole("button", { name: "Architecture" }).click();
+  await window.getByRole("button", { name: "Polygon face" }).click();
+  for (const [x, y] of [
+    [0.44, 0.64],
+    [0.56, 0.64],
+    [0.5, 0.52],
+  ]) {
+    await canvas.click({ position: { x: bounds.width * x, y: bounds.height * y } });
+  }
+  await window.getByRole("button", { name: "Create face" }).click();
+  await window.getByText("Polygon face 1", { exact: true }).last().waitFor({ state: "visible" });
+  const extrusion = window.getByLabel("Extrusion height (mm)");
+  await extrusion.fill("2500");
+  await extrusion.press("Tab");
+  await window.getByRole("button", { name: /Cube/ }).click();
+  await canvas.click({ position: { x: bounds.width * 0.62, y: bounds.height * 0.55 } });
+  await window.getByText("Cube", { exact: true }).last().waitFor({ state: "visible" });
+  await window.screenshot({ path: path.join(artifacts, "primitives-and-extrusion.png") });
+
   if (process.env.SKETCHER_LIVE_TERRAIN === "1") {
-    await window.getByRole("button", { name: "Architecture" }).click();
     await window.getByRole("button", { name: "Add terrain layer" }).click();
     await window.getByPlaceholder("Search Norwegian place...").fill("Oslo");
     await window.getByRole("button", { name: "Search" }).click();
