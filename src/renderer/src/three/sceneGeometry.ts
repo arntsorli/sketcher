@@ -666,11 +666,17 @@ export function createTerrainMesh(layer: TerrainLayer, imageryBase64?: string): 
     positions.needsUpdate = true;
     geometry.computeVertexNormals();
   }
-  const terrainMaterial = imageryBase64
-    ? new THREE.MeshStandardMaterial({
-        map: new THREE.TextureLoader().load(`data:image/png;base64,${imageryBase64}`),
-        roughness: 0.92,
-        metalness: 0,
+  const terrainTexture = imageryBase64
+    ? new THREE.TextureLoader().load(`data:image/png;base64,${imageryBase64}`)
+    : undefined;
+  if (terrainTexture) terrainTexture.colorSpace = THREE.SRGBColorSpace;
+  const terrainMaterial = terrainTexture
+    ? new THREE.MeshBasicMaterial({
+        map: terrainTexture,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
       })
     : materials.terrain;
   const mesh = new THREE.Mesh(geometry, terrainMaterial);

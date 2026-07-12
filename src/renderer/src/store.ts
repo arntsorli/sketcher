@@ -740,6 +740,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       project.scene.terrainLayers.push(layer);
       project.georeference ??= { anchorWgs84: layer.anchorWgs84, epsg: layer.sourceEpsg };
     });
+    set({ selection: { type: "terrain", id: layer.id }, status: `${layer.name} added` });
     if (elevationArchiveData && layer.elevationArchivePath) {
       set((state) => ({
         terrainAssets: {

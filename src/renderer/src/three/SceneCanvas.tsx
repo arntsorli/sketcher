@@ -296,7 +296,7 @@ export function SceneCanvas() {
     if (!host) return;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(DEFAULT_CANVAS_BACKGROUND);
-    scene.fog = new THREE.FogExp2(DEFAULT_CANVAS_BACKGROUND, 0.012);
+    scene.fog = new THREE.FogExp2(DEFAULT_CANVAS_BACKGROUND, 0.0015);
     const architectureCamera = new THREE.PerspectiveCamera(
       45,
       host.clientWidth / host.clientHeight,

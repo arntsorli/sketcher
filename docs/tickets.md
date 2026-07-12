@@ -444,11 +444,13 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **In progress**
 
-- Replaced coordinate and fixed-size AOI setup with a map-first flow: search for a Norwegian place or pan and zoom, then click three or more vertices to select the import polygon.
-- Render the clicked vertices and closed polygon directly on the MapLibre map; reject selections wider or taller than 2 km.
-- Cache an Esri satellite image or topographic map through the narrow Electron IPC allow-list, then add it immediately as a clipped Z=0 scene surface with source bounds, attribution, and embedded project data.
-- Unit coverage persists the clicked polygon and verifies its clipped render mesh. The live Electron smoke creates a map layer by searching, clicking three map points, and importing it.
-- Remaining: offline-restart E2E, editable AOI vertices/drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and high-resolution orthophoto remain follow-on work rather than prerequisites.
+- Rebuilt the workflow from the proven sibling SiteForge/Yard Planner pattern, adapted to Electron with a Leaflet raster selector so it does not compete with the Three.js viewport for WebGL. It provides native pan/zoom, map-native polygon clicks, explicit finish/undo/clear actions, and a one-click Use visible map area option.
+- Search flies to live Geonorge place results. Satellite and topographic modes now use matching Esri preview and extraction sources instead of a fragile capabilities-derived preview paired with a different capture source.
+- Capture requests retain the selected bounds' aspect ratio instead of stretching every selection into a square image. Invalid provider responses are rejected before they enter the project archive.
+- Render the selected vertices and closed polygon directly on the map, report dimensions and area, and reject selections wider or taller than 2 km.
+- Cache the image through the narrow Electron IPC allow-list, add it as a clipped Z=0 scene surface with source bounds and attribution, select it, and frame it automatically after import.
+- Unit coverage verifies bounds selection, metre/area calculation, aspect-correct extraction, persisted polygon data, UV mapping, and clipped render geometry. The live Electron smoke searches, validates visible-bounds capture, draws and finishes a polygon, imports it, and confirms the scene layer.
+- Remaining: offline-restart E2E, editable polygon drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and high-resolution orthophoto remain follow-on work rather than prerequisites.
 
 ### SK-026 — Expanded site-object library
 

@@ -137,12 +137,23 @@ try {
 
   if (process.env.SKETCHER_LIVE_TERRAIN === "1") {
     await window.getByRole("button", { name: "Add terrain layer" }).click();
-    await window.getByPlaceholder("Search Norwegian place...").fill("Oslo");
+    await window.getByPlaceholder("Search place or address...").fill("Oslo");
     await window.getByRole("button", { name: "Search" }).click();
     const firstPlace = window.locator(".search-results button").first();
     await firstPlace.waitFor({ state: "visible", timeout: 15_000 });
     await firstPlace.click();
-    const map = window.locator('.map-frame[data-map-ready="true"]');
+    const map = window.locator(".map-frame");
+    await map.waitFor({ state: "visible", timeout: 20_000 });
+    await window.waitForTimeout(1500);
+    await window.screenshot({ path: path.join(artifacts, "map-dialog.png") });
+    await window
+      .locator('.map-frame[data-map-ready="true"]')
+      .waitFor({ state: "visible", timeout: 20_000 });
+    await window.waitForTimeout(900);
+    await window.getByRole("button", { name: "Use visible map area" }).click();
+    await window.getByText("Area ready to import").waitFor({ state: "visible" });
+    await window.getByRole("button", { name: "Clear", exact: true }).click();
+    await window.getByRole("button", { name: "Draw polygon" }).click();
     const mapBounds = await map.boundingBox();
     if (!mapBounds) throw new Error("Map selector has no visible bounds.");
     for (const [x, y] of [
@@ -152,10 +163,26 @@ try {
     ]) {
       await map.click({ position: { x: mapBounds.width * x, y: mapBounds.height * y } });
     }
-    await window.getByText(/^3 points selected/).waitFor({ state: "visible" });
+    await window.getByText(/^3 points/).waitFor({ state: "visible" });
+    await window.getByRole("button", { name: "Finish polygon" }).click();
+    await window.getByText("Area ready to import").waitFor({ state: "visible" });
     await window.getByRole("button", { name: "Import selected map area" }).click();
-    await window.locator(".terrain-dialog").waitFor({ state: "hidden", timeout: 60_000 });
-    await window.getByText(/^(Map|Satellite) area /).waitFor({ state: "visible" });
+    await Promise.race([
+      window.locator(".terrain-dialog").waitFor({ state: "hidden", timeout: 60_000 }),
+      window
+        .locator(".terrain-dialog .inline-error")
+        .waitFor({ state: "visible", timeout: 60_000 }),
+    ]);
+    const importError = window.locator(".terrain-dialog .inline-error");
+    if (await importError.isVisible()) {
+      throw new Error(`Map import failed: ${await importError.textContent()}`);
+    }
+    await window
+      .getByText(/^Satellite \d/)
+      .first()
+      .waitFor({ state: "visible" });
+    await window.waitForTimeout(2_000);
+    await canvas.click({ position: { x: bounds.width * 0.86, y: bounds.height * 0.82 } });
     await window.screenshot({ path: path.join(artifacts, "terrain.png") });
   }
 

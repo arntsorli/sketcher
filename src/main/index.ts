@@ -190,7 +190,7 @@ function registerIpc(): void {
       url.searchParams.set("treffPerSide", "10");
       url.searchParams.set("side", "1");
       url.searchParams.set("utkoordsys", "4258");
-      const response = await net.fetch(url.toString());
+      const response = await net.fetch(url.toString(), { signal: AbortSignal.timeout(15_000) });
       if (!response.ok) throw new Error(`Place search failed (${response.status}).`);
       const payload = (await response.json()) as any;
       return (payload.navn ?? []).flatMap((entry: any) => {
@@ -209,16 +209,6 @@ function registerIpc(): void {
             ]
           : [];
       });
-    }),
-  );
-  ipcMain.handle(
-    "terrain:fetchCapabilities",
-    trustedHandler(async (url: string) => {
-      const parsed = new URL(url);
-      if (parsed.protocol !== "https:") throw new Error("Only HTTPS terrain services are allowed.");
-      const response = await net.fetch(parsed.toString());
-      if (!response.ok) throw new Error(`Capabilities request failed (${response.status}).`);
-      return response.text();
     }),
   );
   ipcMain.handle(
@@ -288,9 +278,20 @@ function registerIpc(): void {
       if (parsed.protocol !== "https:" || !trustedHosts.has(parsed.hostname)) {
         throw new Error("Only the configured public map-image provider is allowed.");
       }
-      const response = await net.fetch(parsed.toString());
-      if (!response.ok) throw new Error(`Map image request failed (${response.status}).`);
+      const response = await net.fetch(parsed.toString(), {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        const details = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 240);
+        throw new Error(
+          `Map image request failed (${response.status})${details ? `: ${details}` : "."}`,
+        );
+      }
       const bytes = new Uint8Array(await response.arrayBuffer());
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.startsWith("image/") || bytes.byteLength < 1_000) {
+        throw new Error("The map provider returned an invalid image. Try again or change imagery.");
+      }
       return Buffer.from(bytes).toString("base64");
     }),
   );
