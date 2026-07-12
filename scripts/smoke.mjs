@@ -92,6 +92,15 @@ try {
   await window.getByRole("button", { name: "Close foundation" }).click();
   await window.getByText("Building properties").waitFor({ state: "visible" });
   await window.getByRole("button", { name: /Wall/ }).click();
+  await window.mouse.move(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.55);
+  await window.keyboard.down("Control");
+  await window.mouse.wheel(0, 100);
+  await window.keyboard.up("Control");
+  await window.locator('.scene-host[data-axis-angle="5"]').waitFor({ state: "visible" });
+  await window.keyboard.down("Control");
+  await window.mouse.wheel(0, -100);
+  await window.keyboard.up("Control");
+  await window.locator('.scene-host[data-axis-angle="0"]').waitFor({ state: "visible" });
   await canvas.click({ position: { x: bounds.width * 0.46, y: bounds.height * 0.57 } });
   await canvas.click({ position: { x: bounds.width * 0.56, y: bounds.height * 0.57 } });
   await window
@@ -112,7 +121,7 @@ try {
     .locator('.scene-host[data-opening-preview="invalid"]')
     .waitFor({ state: "visible", timeout: 10_000 });
   await window.getByText(/^R \d+ mm$/).waitFor({ state: "visible" });
-  await window.getByRole("button", { name: "+ Gable roof" }).click();
+  await window.getByRole("button", { name: "Gable roof", exact: true }).click();
   await window.getByText("Gable properties").waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "gable-roof.png") });
 
@@ -130,9 +139,21 @@ try {
   const extrusion = window.getByLabel("Extrusion height (mm)");
   await extrusion.fill("2500");
   await extrusion.press("Tab");
-  await window.getByRole("button", { name: /Cube/ }).click();
+  await window.getByRole("button", { name: "Add object" }).click();
+  await window.getByRole("button", { name: "Cube", exact: true }).click();
   await canvas.click({ position: { x: bounds.width * 0.62, y: bounds.height * 0.55 } });
   await window.getByText("Cube", { exact: true }).last().waitFor({ state: "visible" });
+  await window.keyboard.press("Control+c");
+  await window.keyboard.press("Control+v");
+  await window.getByText("Cube copy", { exact: true }).last().waitFor({ state: "visible" });
+  await window.getByRole("button", { name: "Clipping plane" }).click();
+  await window.getByLabel("Enable clipping").check();
+  await window.locator('.scene-host[data-clipping-enabled="true"]').waitFor({ state: "visible" });
+  await window.getByLabel("Clipping plane position in millimetres").fill("1000");
+  await window.screenshot({ path: path.join(artifacts, "clipping-plane.png") });
+  await window.getByRole("button", { name: "Reset" }).click();
+  await window.locator('.scene-host[data-clipping-enabled="false"]').waitFor({ state: "visible" });
+  await window.getByRole("button", { name: "Close clipping controls" }).click();
   await window.screenshot({ path: path.join(artifacts, "primitives-and-extrusion.png") });
 
   if (process.env.SKETCHER_LIVE_TERRAIN === "1") {

@@ -30,12 +30,12 @@ describe("map area selection", () => {
 
   it("keeps the extracted image aspect ratio close to the selected map area", () => {
     expect(imageSizeForSelection({ width: 1000, height: 500 })).toEqual({
-      width: 1600,
-      height: 800,
+      width: 4096,
+      height: 2048,
     });
     expect(imageSizeForSelection({ width: 80, height: 60 })).toEqual({
-      width: 320,
-      height: 240,
+      width: 640,
+      height: 480,
     });
   });
 

@@ -1000,6 +1000,15 @@ strong {
   background: rgb(78 197 255 / 7%);
 }
 
+.architecture-rail > .tool-button,
+.architecture-rail > .button,
+.architecture-rail > .object-library,
+.architecture-rail > .terrain-actions,
+.builder-rail > .tool-button,
+.builder-rail > .button {
+  display: none;
+}
+
 .tool-button > span {
   display: grid;
   width: 30px;
@@ -1171,6 +1180,233 @@ strong {
   width: 100%;
   height: 100%;
   outline: none;
+}
+
+.viewport-toolbar-shell {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 8;
+  display: grid;
+  justify-items: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.viewport-toolbar {
+  display: flex;
+  max-width: min(900px, calc(100vw - 590px));
+  align-items: stretch;
+  gap: 3px;
+  overflow-x: auto;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 12px;
+  background: rgb(13 19 25 / 94%);
+  box-shadow: 0 14px 38px rgb(0 0 0 / 42%);
+  padding: 5px;
+  pointer-events: auto;
+  backdrop-filter: blur(14px);
+}
+
+.viewport-tool-button {
+  display: grid;
+  min-width: 52px;
+  min-height: 48px;
+  flex: none;
+  place-items: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 7px;
+}
+
+.viewport-tool-button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.viewport-tool-button.active {
+  border-color: rgb(78 197 255 / 36%);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.viewport-tool-button:disabled {
+  opacity: 0.3;
+}
+
+.viewport-tool-button > span {
+  font: 800 12px / 1 var(--font-mono);
+}
+
+.viewport-tool-button > small {
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.viewport-toolbar-divider {
+  width: 1px;
+  flex: none;
+  margin: 5px 2px;
+  background: var(--line);
+}
+
+.toolbar-angle-status {
+  display: grid;
+  min-width: 76px;
+  align-content: center;
+  gap: 1px;
+  padding: 2px 8px;
+  text-align: center;
+}
+
+.toolbar-angle-status span,
+.toolbar-angle-status small {
+  color: var(--quiet);
+  font-size: 8px;
+}
+
+.toolbar-angle-status strong {
+  color: var(--accent);
+  font: 800 12px / 1.2 var(--font-mono);
+}
+
+.viewport-tool-popover {
+  width: min(430px, calc(100vw - 620px));
+  margin-bottom: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: rgb(16 23 30 / 97%);
+  box-shadow: 0 18px 45px rgb(0 0 0 / 45%);
+  padding: 12px;
+  pointer-events: auto;
+  backdrop-filter: blur(16px);
+}
+
+.viewport-popover-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.viewport-popover-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.viewport-popover-heading strong {
+  font-size: 12px;
+}
+
+.viewport-popover-heading span {
+  color: var(--quiet);
+  font-size: 9px;
+}
+
+.viewport-popover-heading > button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.toolbar-asset-grid {
+  display: grid;
+  max-height: 250px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  overflow-y: auto;
+  margin-bottom: 9px;
+}
+
+.toolbar-asset-grid button {
+  display: grid;
+  min-width: 0;
+  min-height: 62px;
+  place-content: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #10161c;
+}
+
+.toolbar-asset-grid button:hover {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.toolbar-asset-grid span {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.toolbar-asset-grid small {
+  max-width: 65px;
+  overflow: hidden;
+  color: var(--quiet);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clipping-popover {
+  width: min(360px, calc(100vw - 620px));
+}
+
+.clipping-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.clipping-toggle input {
+  width: auto;
+  min-height: 0;
+}
+
+.clipping-axis-switch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin: 10px 0;
+  border: 0;
+  padding: 0;
+}
+
+.clipping-axis-switch legend {
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.clipping-axis-switch button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #10161c;
+  padding: 7px;
+}
+
+.clipping-axis-switch button.active {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.clipping-popover input[type="range"] {
+  padding: 0;
+}
+
+.clipping-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
 }
 
 .dimension-overlay {

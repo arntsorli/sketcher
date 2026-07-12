@@ -24,6 +24,288 @@ function ToolButton({ tool, label, hint }: { tool: EditorTool; label: string; hi
   );
 }
 
+function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
+  const project = useEditorStore((state) => state.project);
+  const mode = useEditorStore((state) => state.mode);
+  const tool = useEditorStore((state) => state.tool);
+  const transformMode = useEditorStore((state) => state.transformMode);
+  const clipping = useEditorStore((state) => state.clipping);
+  const selection = useEditorStore((state) => state.selection);
+  const clipboard = useEditorStore((state) => state.clipboard);
+  const activeBuildingId = useEditorStore((state) => state.activeBuildingId);
+  const draft = useEditorStore((state) => state.draft);
+  const setTool = useEditorStore((state) => state.setTool);
+  const setTransformMode = useEditorStore((state) => state.setTransformMode);
+  const setClipping = useEditorStore((state) => state.setClipping);
+  const startNewBuilding = useEditorStore((state) => state.startNewBuilding);
+  const placeAsset = useEditorStore((state) => state.placeAsset);
+  const importAsset = useEditorStore((state) => state.importAsset);
+  const copySelection = useEditorStore((state) => state.copySelection);
+  const pasteClipboard = useEditorStore((state) => state.pasteClipboard);
+  const finishFoundation = useEditorStore((state) => state.finishFoundation);
+  const removeLastFoundationPoint = useEditorStore((state) => state.removeLastFoundationPoint);
+  const finishPolygonFace = useEditorStore((state) => state.finishPolygonFace);
+  const removeLastPolygonPoint = useEditorStore((state) => state.removeLastPolygonPoint);
+  const addRoof = useEditorStore((state) => state.addRoof);
+  const [addOpen, setAddOpen] = useState(false);
+  const [clipOpen, setClipOpen] = useState(false);
+  const activeBuilding = project?.buildingDefinitions.find((item) => item.id === activeBuildingId);
+
+  if (!project) return null;
+
+  const action = (
+    label: string,
+    icon: string,
+    onClick: () => void,
+    options?: { active?: boolean; disabled?: boolean; title?: string },
+  ) => (
+    <button
+      className={`viewport-tool-button ${options?.active ? "active" : ""}`}
+      disabled={options?.disabled}
+      onClick={onClick}
+      title={options?.title ?? label}
+      aria-label={label}
+    >
+      <span>{icon}</span>
+      <small>{label}</small>
+    </button>
+  );
+
+  return (
+    <div className="viewport-toolbar-shell">
+      {addOpen && mode === "architecture" && (
+        <div className="viewport-tool-popover add-object-popover">
+          <div className="viewport-popover-heading">
+            <div>
+              <strong>Add object</strong>
+              <span>Choose an object, then click the scene to place it.</span>
+            </div>
+            <button onClick={() => setAddOpen(false)} aria-label="Close object palette">
+              ×
+            </button>
+          </div>
+          <div className="toolbar-asset-grid">
+            {project.assetDefinitions.map((definition) => (
+              <button
+                key={definition.id}
+                onClick={() => {
+                  placeAsset(definition.id);
+                  setAddOpen(false);
+                }}
+                aria-label={definition.name}
+              >
+                <span>{definition.source === "imported" ? "◇" : definition.name.slice(0, 1)}</span>
+                <small>{definition.name}</small>
+              </button>
+            ))}
+          </div>
+          <button
+            className="button secondary wide small"
+            onClick={() => {
+              void importAsset();
+              setAddOpen(false);
+            }}
+          >
+            Import GLB object
+          </button>
+        </div>
+      )}
+
+      {clipOpen && (
+        <div className="viewport-tool-popover clipping-popover">
+          <div className="viewport-popover-heading">
+            <div>
+              <strong>Clipping plane</strong>
+              <span>Inspect the scene without changing model geometry.</span>
+            </div>
+            <button onClick={() => setClipOpen(false)} aria-label="Close clipping controls">
+              ×
+            </button>
+          </div>
+          <label className="clipping-toggle">
+            <input
+              type="checkbox"
+              checked={clipping.enabled}
+              onChange={(event) => setClipping({ enabled: event.target.checked })}
+            />
+            Enable clipping
+          </label>
+          <fieldset className="clipping-axis-switch">
+            <legend>Plane normal</legend>
+            {(["x", "y", "z"] as const).map((axis) => (
+              <button
+                type="button"
+                className={clipping.axis === axis ? "active" : ""}
+                key={axis}
+                onClick={() => setClipping({ axis, enabled: true })}
+              >
+                {axis.toUpperCase()}
+              </button>
+            ))}
+          </fieldset>
+          <label>
+            Position (mm)
+            <input
+              type="range"
+              min={-100000}
+              max={100000}
+              step={100}
+              value={Math.max(-100000, Math.min(100000, clipping.offsetMm))}
+              onChange={(event) =>
+                setClipping({ offsetMm: Number(event.target.value), enabled: true })
+              }
+            />
+          </label>
+          <input
+            aria-label="Clipping plane position in millimetres"
+            type="number"
+            step={100}
+            value={clipping.offsetMm}
+            onChange={(event) =>
+              setClipping({ offsetMm: Number(event.target.value) || 0, enabled: true })
+            }
+          />
+          <div className="clipping-actions">
+            <button
+              className="button secondary small"
+              onClick={() => setClipping({ inverted: !clipping.inverted, enabled: true })}
+            >
+              Flip direction
+            </button>
+            <button
+              className="button ghost small"
+              onClick={() =>
+                setClipping({
+                  enabled: false,
+                  axis: "x",
+                  offsetMm: 0,
+                  inverted: false,
+                  showHelper: true,
+                })
+              }
+            >
+              Reset
+            </button>
+          </div>
+          <label className="clipping-toggle">
+            <input
+              type="checkbox"
+              checked={clipping.showHelper}
+              onChange={(event) => setClipping({ showHelper: event.target.checked })}
+            />
+            Show clipping plane
+          </label>
+        </div>
+      )}
+
+      <div className="viewport-toolbar" role="toolbar" aria-label="3D modelling tools">
+        {mode === "architecture" ? (
+          <>
+            {action("Select", "S", () => setTool("select"), { active: tool === "select" })}
+            <span className="viewport-toolbar-divider" />
+            {action("Move", "G", () => setTransformMode("translate"), {
+              active: transformMode === "translate",
+              disabled: !selection || selection.type === "terrain",
+              title: "Move selected object (G)",
+            })}
+            {action("Rotate", "R", () => setTransformMode("rotate"), {
+              active: transformMode === "rotate",
+              disabled: !selection || selection.type === "terrain",
+              title: "Rotate selected object (R)",
+            })}
+            {action("Scale", "S", () => setTransformMode("scale"), {
+              active: transformMode === "scale",
+              disabled: selection?.type !== "asset",
+              title: "Scale selected object (S)",
+            })}
+            <span className="viewport-toolbar-divider" />
+            {action("Polygon face", "P", () => setTool("polygon"), {
+              active: tool === "polygon",
+            })}
+            {tool === "polygon" &&
+              action("Create face", "✓", finishPolygonFace, {
+                disabled: draft.points.length < 3,
+              })}
+            {tool === "polygon" &&
+              action("Undo point", "↶", removeLastPolygonPoint, {
+                disabled: draft.points.length === 0,
+              })}
+            {action("New building", "+B", startNewBuilding)}
+            {action(
+              "Add object",
+              "+",
+              () => {
+                setAddOpen((value) => !value);
+                setClipOpen(false);
+              },
+              { active: addOpen },
+            )}
+            {action("Add terrain layer", "M", onTerrain)}
+            <span className="viewport-toolbar-divider" />
+            {action("Copy object", "C", copySelection, {
+              disabled: selection?.type !== "building" && selection?.type !== "asset",
+              title: "Copy selected object (Ctrl+C)",
+            })}
+            {action("Paste object", "V", pasteClipboard, {
+              disabled: !clipboard,
+              title: "Paste copied object (Ctrl+V)",
+            })}
+          </>
+        ) : (
+          <>
+            {!activeBuilding &&
+              action("Foundation", "F", () => setTool("foundation"), {
+                active: tool === "foundation",
+              })}
+            {!activeBuilding &&
+              action("Close foundation", "✓", finishFoundation, {
+                disabled: draft.points.length < 3,
+              })}
+            {!activeBuilding &&
+              action("Undo last point", "↶", removeLastFoundationPoint, {
+                disabled: draft.points.length === 0,
+              })}
+            {activeBuilding && (
+              <>
+                {action("Select", "S", () => setTool("select"), { active: tool === "select" })}
+                {action("Wall", "W", () => setTool("wall"), { active: tool === "wall" })}
+                {action("Door", "D", () => setTool("door"), { active: tool === "door" })}
+                {action("Window", "O", () => setTool("window"), {
+                  active: tool === "window",
+                })}
+                {action("Carport", "C", () => setTool("carport"), {
+                  active: tool === "carport",
+                })}
+                {action("Stair", "T", () => setTool("stair"), { active: tool === "stair" })}
+                {action("Gable roof", "R", addRoof, {
+                  disabled: Boolean(activeBuilding.roof),
+                })}
+                {tool === "wall" && (
+                  <div className="toolbar-angle-status">
+                    <span>Wall angle</span>
+                    <strong>{draft.axisAngle}°</strong>
+                    <small>Ctrl + wheel</small>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+        <span className="viewport-toolbar-divider" />
+        {action(
+          "Clipping plane",
+          "⌁",
+          () => {
+            setClipOpen((value) => !value);
+            setAddOpen(false);
+          },
+          { active: clipOpen || clipping.enabled },
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function EditorShell({ onSettings }: Props) {
   const project = useEditorStore((state) => state.project);
   const filePath = useEditorStore((state) => state.filePath);
@@ -54,6 +336,8 @@ export function EditorShell({ onSettings }: Props) {
   const closeProject = useEditorStore((state) => state.closeProject);
   const undo = useEditorStore((state) => state.undo);
   const redo = useEditorStore((state) => state.redo);
+  const copySelection = useEditorStore((state) => state.copySelection);
+  const pasteClipboard = useEditorStore((state) => state.pasteClipboard);
   const commit = useEditorStore((state) => state.commit);
   const [terrainOpen, setTerrainOpen] = useState(false);
 
@@ -64,22 +348,37 @@ export function EditorShell({ onSettings }: Props) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!event.ctrlKey) return;
-      if (event.key.toLowerCase() === "s") {
+      const key = event.key.toLowerCase();
+      const target = event.target;
+      const editingText =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+      if (key === "s") {
         event.preventDefault();
         void save(event.shiftKey);
       }
-      if (event.key.toLowerCase() === "z") {
+      if (key === "z" && !editingText) {
         event.preventDefault();
         undo();
       }
-      if (event.key.toLowerCase() === "y") {
+      if (key === "y" && !editingText) {
         event.preventDefault();
         redo();
+      }
+      if (key === "c" && !editingText) {
+        event.preventDefault();
+        copySelection();
+      }
+      if (key === "v" && !editingText) {
+        event.preventDefault();
+        pasteClipboard();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [save, undo, redo]);
+  }, [save, undo, redo, copySelection, pasteClipboard]);
 
   useEffect(() => {
     if (!dirty || !filePath || !project || !settings) return;
@@ -167,7 +466,7 @@ export function EditorShell({ onSettings }: Props) {
       </header>
 
       <div className="editor-main">
-        <nav className="tool-rail">
+        <nav className={`tool-rail ${mode === "builder" ? "builder-rail" : "architecture-rail"}`}>
           {mode === "builder" ? (
             <>
               <div className="rail-heading">
@@ -216,7 +515,7 @@ export function EditorShell({ onSettings }: Props) {
               <div className="rail-note">
                 <strong>Locked top view</strong>
                 <br />
-                Shift + wheel
+                Ctrl + wheel
                 <br />
                 <strong>{draft.axisAngle}° axis offset</strong>
               </div>
@@ -269,7 +568,7 @@ export function EditorShell({ onSettings }: Props) {
                 ))}
                 {project.buildingDefinitions.length === 0 && <p>Build a definition first.</p>}
               </div>
-              <div className="library-section">
+              <div className="library-section object-library">
                 <div className="library-title">
                   <h3>Objects</h3>
                   <button onClick={() => void importAsset()}>Import</button>
@@ -303,6 +602,7 @@ export function EditorShell({ onSettings }: Props) {
         </nav>
         <main className="viewport-panel">
           <SceneCanvas />
+          <ViewportToolbar onTerrain={() => setTerrainOpen(true)} />
           <div className="view-cube" aria-hidden="true">
             <span>Z</span>
             <b>TOP</b>

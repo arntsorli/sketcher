@@ -15,6 +15,8 @@ export interface SelectionDimensions {
 }
 
 export const MAX_SELECTION_METERS = 2_000;
+export const MAX_CAPTURE_PIXELS = 4_096;
+export const TARGET_CAPTURE_PIXELS_PER_METER = 8;
 
 const ESRI_ROOT = "https://services.arcgisonline.com/ArcGIS/rest/services";
 
@@ -78,7 +80,7 @@ export function imageSizeForSelection(dimensions: Pick<SelectionDimensions, "wid
   height: number;
 } {
   const longest = Math.max(dimensions.width, dimensions.height, 1);
-  const scale = Math.min(1600 / longest, 4);
+  const scale = Math.min(MAX_CAPTURE_PIXELS / longest, TARGET_CAPTURE_PIXELS_PER_METER);
   return {
     width: Math.max(64, Math.round(dimensions.width * scale)),
     height: Math.max(64, Math.round(dimensions.height * scale)),

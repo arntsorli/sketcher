@@ -85,27 +85,32 @@ try {
   await page.getByText("Building 1 copy", { exact: true }).first().waitFor({ state: "visible" });
   await page.getByText("2 buildings · 0 objects").waitFor({ state: "visible" });
 
-  await page.getByRole("button", { name: "Hedge segment" }).click();
+  await page.keyboard.press("Control+c");
+  await page.keyboard.press("Control+v");
+  await page.getByText("3 buildings · 0 objects").waitFor({ state: "visible" });
+
+  await page.getByRole("button", { name: "Add object" }).click();
+  await page.getByRole("button", { name: "Hedge segment", exact: true }).click();
   await page.mouse.move(bounds.x + bounds.width * 0.52, bounds.y + bounds.height * 0.67);
   await page
     .locator('.scene-host[data-placement-preview="place-asset"]')
     .waitFor({ state: "visible" });
   await canvas.click({ position: { x: bounds.width * 0.52, y: bounds.height * 0.67 } });
-  await page.getByText("2 buildings · 1 objects").waitFor({ state: "visible" });
+  await page.getByText("3 buildings · 1 objects").waitFor({ state: "visible" });
 
   await page.getByRole("button", { name: "Save" }).click();
   await page.getByText("Saved").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Back to home" }).click();
   await page.locator(".home-page").waitFor({ state: "visible" });
   await page.getByText("Foundation E2E", { exact: true }).first().click();
-  await page.getByText("2 buildings · 1 objects").waitFor({ state: "visible" });
+  await page.getByText("3 buildings · 1 objects").waitFor({ state: "visible" });
 
   const rendererHasNode = await page.evaluate(
     () => typeof globalThis.process !== "undefined" || typeof globalThis.require !== "undefined",
   );
   if (rendererHasNode) throw new Error("Node globals leaked into the renderer.");
   console.log(
-    "E2E passed: direct foundation, Builder edit, shared placement, Make Unique, hedge preview, save, and reopen.",
+    "E2E passed: direct foundation, Builder edit, shared placement, Make Unique, building copy/paste, hedge preview, save, and reopen.",
   );
 } finally {
   await app.close();

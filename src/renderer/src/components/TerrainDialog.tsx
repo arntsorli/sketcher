@@ -58,6 +58,10 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
     selection &&
       (selection.width > MAX_SELECTION_METERS || selection.height > MAX_SELECTION_METERS),
   );
+  const selectedImageSize = useMemo(
+    () => (selection ? imageSizeForSelection(selection) : undefined),
+    [selection],
+  );
   const selectionReady = points.length >= 3 && selectionTool === "navigate";
   const canImport = selectionReady && !selectionTooLarge && !busy;
 
@@ -248,7 +252,7 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
     setError(undefined);
     try {
       const bounds = polygonBounds(points);
-      const imageSize = imageSizeForSelection(selection);
+      const imageSize = selectedImageSize ?? imageSizeForSelection(selection);
       const imageryBase64 = await window.sketcher.terrain.fetchImage(
         staticMapImageUrl(bounds, imageryMode, imageSize),
       );
@@ -416,7 +420,7 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
                   <span>
                     {points.length} point{points.length === 1 ? "" : "s"}
                     {selection &&
-                      ` · ${Math.round(selection.width)} × ${Math.round(selection.height)} m · ${Math.round(selection.area).toLocaleString()} m²`}
+                      ` · ${Math.round(selection.width)} × ${Math.round(selection.height)} m · ${Math.round(selection.area).toLocaleString()} m²${selectedImageSize ? ` · ${selectedImageSize.width} × ${selectedImageSize.height} px` : ""}`}
                   </span>
                 </div>
               </div>

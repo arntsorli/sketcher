@@ -9,6 +9,8 @@ import {
 } from "../../shared/geometry";
 import type { ProjectArchive, ProjectCard } from "../../shared/ipc";
 import {
+  type AssetInstance,
+  type BuildingInstance,
   createBuilding,
   type GlobalSettings,
   type ProjectDocument,
@@ -17,6 +19,19 @@ import {
 } from "../../shared/model";
 
 export type EditorMode = "architecture" | "builder";
+export type TransformMode = "translate" | "rotate" | "scale";
+export interface ClippingState {
+  enabled: boolean;
+  axis: "x" | "y" | "z";
+  offsetMm: number;
+  inverted: boolean;
+  showHelper: boolean;
+}
+
+type SceneClipboard =
+  | { type: "building"; instance: BuildingInstance; pasteCount: number }
+  | { type: "asset"; instance: AssetInstance; pasteCount: number };
+
 export type EditorTool =
   | "select"
   | "foundation"
@@ -59,6 +74,9 @@ interface EditorState {
   version: string;
   mode: EditorMode;
   tool: EditorTool;
+  transformMode: TransformMode;
+  clipping: ClippingState;
+  clipboard?: SceneClipboard;
   selection: Selection;
   activeBuildingId?: string;
   activeFloorId?: string;
@@ -80,6 +98,8 @@ interface EditorState {
   editBuilding(definitionId: string): void;
   setActiveFloor(floorId: string): void;
   setTool(tool: EditorTool): void;
+  setTransformMode(mode: TransformMode): void;
+  setClipping(update: Partial<ClippingState>): void;
   setSelection(selection: Selection): void;
   setStatus(status: string): void;
   setError(error?: string): void;
@@ -87,6 +107,8 @@ interface EditorState {
   commit(label: string, mutate: (project: ProjectDocument) => void): void;
   undo(): void;
   redo(): void;
+  copySelection(): void;
+  pasteClipboard(): void;
   addFoundationPoint(point: Vec2): void;
   removeLastFoundationPoint(): void;
   finishFoundation(): void;
@@ -139,6 +161,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   version: "0.1.0",
   mode: "architecture",
   tool: "select",
+  transformMode: "translate",
+  clipping: { enabled: false, axis: "x", offsetMm: 0, inverted: false, showHelper: true },
   selection: null,
   draft: { points: [], axisAngle: 0, numericInput: "" },
   dirty: false,
@@ -165,6 +189,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       terrainAssets: opened.terrainAssets,
       mode: "architecture",
       tool: "select",
+      transformMode: "translate",
+      clipping: { enabled: false, axis: "x", offsetMm: 0, inverted: false, showHelper: true },
+      clipboard: undefined,
       dirty: false,
       past: [],
       future: [],
@@ -193,6 +220,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       terrainAssets: opened.terrainAssets,
       mode: "architecture",
       tool: "select",
+      transformMode: "translate",
+      clipping: { enabled: false, axis: "x", offsetMm: 0, inverted: false, showHelper: true },
+      clipboard: undefined,
       dirty: false,
       past: [],
       future: [],
@@ -299,13 +329,32 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       tool,
       placementDefinitionId: undefined,
       placementAssetId: undefined,
-      draft: { points: [], axisAngle: get().draft.axisAngle, numericInput: "" },
+      draft: {
+        points: [],
+        axisAngle: tool === "wall" ? 0 : get().draft.axisAngle,
+        numericInput: "",
+      },
       status: `${tool.replace("-", " ")} tool`,
       error: undefined,
     });
   },
+  setTransformMode(transformMode) {
+    set({ transformMode, status: `${transformMode} mode` });
+  },
+  setClipping(update) {
+    set((state) => ({
+      clipping: { ...state.clipping, ...update },
+      status: update.enabled === false ? "Clipping disabled" : "Clipping plane updated",
+    }));
+  },
   setSelection(selection) {
-    set({ selection });
+    set((state) => ({
+      selection,
+      transformMode:
+        selection?.type === "building" && state.transformMode === "scale"
+          ? "translate"
+          : state.transformMode,
+    }));
   },
   setStatus(status) {
     set({ status });
@@ -355,6 +404,66 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       future: state.future.slice(1),
       dirty: true,
       status: "Redo",
+    });
+  },
+
+  copySelection() {
+    const state = get();
+    if (state.selection?.type === "building") {
+      const instance = state.project?.scene.buildingInstances.find(
+        (item) => item.id === state.selection?.id,
+      );
+      if (instance) {
+        set({
+          clipboard: { type: "building", instance: structuredClone(instance), pasteCount: 0 },
+          status: `${instance.name} copied`,
+        });
+        return;
+      }
+    }
+    if (state.selection?.type === "asset") {
+      const instance = state.project?.scene.assetInstances.find(
+        (item) => item.id === state.selection?.id,
+      );
+      if (instance) {
+        set({
+          clipboard: { type: "asset", instance: structuredClone(instance), pasteCount: 0 },
+          status: `${instance.name} copied`,
+        });
+        return;
+      }
+    }
+    set({ status: "Select a building or object to copy" });
+  },
+
+  pasteClipboard() {
+    const clipboard = get().clipboard;
+    const project = get().project;
+    if (!clipboard || !project) {
+      set({ status: "Nothing to paste" });
+      return;
+    }
+    const pasteNumber = clipboard.pasteCount + 1;
+    const id = crypto.randomUUID();
+    const instance = structuredClone(clipboard.instance);
+    instance.id = id;
+    instance.name =
+      pasteNumber === 1
+        ? `${clipboard.instance.name} copy`
+        : `${clipboard.instance.name} copy ${pasteNumber}`;
+    instance.transform.position.x += pasteNumber * 500;
+    instance.transform.position.y += pasteNumber * 500;
+    get().commit(`${instance.name} pasted`, (document) => {
+      if (clipboard.type === "building") {
+        document.scene.buildingInstances.push(instance as BuildingInstance);
+      } else {
+        document.scene.assetInstances.push(instance as AssetInstance);
+      }
+    });
+    set({
+      clipboard: { ...clipboard, pasteCount: pasteNumber },
+      selection: { type: clipboard.type, id },
+      tool: "select",
     });
   },
 

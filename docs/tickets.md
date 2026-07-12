@@ -39,6 +39,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-031 | Architecture floor inspection | Todo | SK-007, SK-012 | Per-instance floor visibility and selection smoke |
 | SK-032 | Delete selected scene items | Todo | SK-007, SK-013 | Keyboard deletion, confirmation, undo, and persistence tests |
 | SK-033 | Primitives, polygon faces, and extrusion | In progress | SK-007, SK-013 | Persisted polygon/extrusion geometry and desktop modelling smoke |
+| SK-034 | Viewport tools, scene clipboard, clipping, and wall angles | Done for v0.1.4 | SK-007, SK-009, SK-013 | Clipboard undo, clipping-plane unit tests, and desktop modelling smoke |
 
 ## Ticket details
 
@@ -539,6 +540,20 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Polygon profiles are stored relative to their scene instance, so translating, rotating, and scaling behaves like other scene objects. Unit coverage verifies persistence and solid bounds; the desktop smoke creates and extrudes a face, then places a Cube.
 - Remaining: face-vertex editing, holes/multiple loops, arbitrary face planes, bevel/taper, extrusion manipulator, material controls, and mesh Boolean operations.
 
+### SK-034 - Viewport tools, scene clipboard, clipping, and wall angles
+
+**Outcome:** Common 3D operations stay close to the canvas, scene objects can be duplicated quickly, buildings can be inspected with a conventional clipping plane, and wall segments are orthogonal unless the user explicitly applies an angle offset.
+
+**Done for v0.1.4**
+
+- Added a bottom-centred viewport toolbar for selection, transforms, polygon massing, building creation, object placement/import, terrain import, clipboard actions, Builder tools, roof creation, and clipping. The left panel now concentrates on the project-local building library instead of repeating direct modelling actions.
+- Added Ctrl+C/Ctrl+V and visible Copy/Paste actions for building and asset instances. Pasted instances retain their shared definition and transform, receive a unique ID/name and cascading 500 mm XY offset, are selected immediately, and participate in Undo/Redo.
+- Added a non-destructive global clipping plane with X/Y/Z normals, millimetre position slider/direct input, direction flip, visible helper, enable/disable, and reset controls.
+- Wall creation resets to the orthogonal X/Y construction axes whenever the Wall tool is selected. Only Ctrl+wheel changes the construction-axis offset in the configured 5 degree increments; normal scrolling remains camera navigation.
+- Satellite/map captures now use the provider's supported 4096 pixel maximum dimension and target up to 8 pixels per metre. The selection summary reports the exact capture dimensions before download. Source imagery resolution still limits real ground detail, and licensed Norwegian orthophoto remains a separate provider ticket.
+- Unit coverage verifies repeated undoable clipboard pastes, clipping-plane placement/direction, orthogonal and offset construction axes, and adaptive high-resolution captures. The desktop smoke exercises the toolbar, Ctrl+wheel angle adjustment, Ctrl+C/Ctrl+V, and clipping enable/reset.
+- Remaining: persist optional clipping presets in project/session preferences, add keyboard discovery/help, and evaluate credential-backed Norge i bilder orthophoto without storing secrets in project archives.
+
 ## Release acceptance checklist
 
 - [x] Packaged Windows application launches and reports the package version.
@@ -547,7 +562,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - [ ] External/internal walls, a door, a window, second floor, straight stair opening, and gable roof persist after restart.
 - [ ] Two shared building instances update together; Make Unique detaches one.
 - [ ] Procedural and imported objects select, focus, transform, persist, and export.
-- [ ] Online terrain normalizes centre elevation to Z=0 and embeds its cached map; offline restart verification remains open.
+- [ ] A selected live map polygon imports as a cached Z=0 surface; offline restart verification remains open.
 - [ ] GeoTIFF terrain imports with correct orientation, scale, and no-data handling.
 - [x] Local CI, dependency audit, build, NSIS, portable packaging, and unpacked-runtime smoke pass.
 - [x] Public `main` is clean, synchronized, and green.
@@ -560,7 +575,7 @@ The following evidence is refreshed before each publication. Any failed command 
 |---|---|
 | Formatting, lint, typecheck, unit tests, renderer/main build | `npm run ci` passes |
 | Dependency security | `npm audit --audit-level=high` reports zero vulnerabilities |
-| Desktop runtime | Home, editor, Builder direct input, sandbox boundary, and Manifold worker smoke pass |
-| Terrain runtime | Live Kartverket/Høydedata terrain smoke pass with a map-textured normalized mesh |
+| Desktop runtime | Home, editor, Builder direct input/wall angle, viewport tools, object copy/paste, clipping, sandbox boundary, and Manifold worker smoke pass |
+| Terrain runtime | Live search, satellite preview, polygon selection, 4096-pixel adaptive capture, and cached Z=0 map-surface smoke pass |
 | Windows distributions | NSIS setup, portable x64, and unpacked app build successfully; unpacked app smoke passes |
-| Public delivery | `d878057` passed verify plus rolling package/publish CI; the GitHub `latest` release now contains fresh NSIS, portable x64, and SHA-256 assets, while `v0.1.4` remains the historical tagged release |
+| Public delivery | Each green code push moves the rolling `latest` release and replaces its NSIS, portable x64, and SHA-256 assets; `v0.1.4` remains the historical tagged release |

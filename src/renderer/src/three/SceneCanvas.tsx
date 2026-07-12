@@ -20,6 +20,7 @@ import type { ProjectDocument, Vec2, Wall } from "../../../shared/model";
 import { useEditorStore } from "../store";
 import { buildWallSolid } from "../workers/geometryClient";
 import type { WallSolidRequest } from "../workers/geometryTypes";
+import { createClippingPlane } from "./clipping";
 import { setExportRoot } from "./sceneBridge";
 import { createBuildingGroup, createBuiltinAsset, createProjectContent } from "./sceneGeometry";
 
@@ -74,6 +75,7 @@ type SceneEngine = {
   orbit: OrbitControls;
   transform: TransformControls;
   grid: THREE.GridHelper;
+  clippingHelper: THREE.PlaneHelper;
   content: THREE.Group;
   draft: THREE.Group;
   raycaster: THREE.Raycaster;
@@ -257,6 +259,8 @@ export function SceneCanvas() {
   const project = useEditorStore((state) => state.project);
   const mode = useEditorStore((state) => state.mode);
   const tool = useEditorStore((state) => state.tool);
+  const transformMode = useEditorStore((state) => state.transformMode);
+  const clipping = useEditorStore((state) => state.clipping);
   const selection = useEditorStore((state) => state.selection);
   const activeBuildingId = useEditorStore((state) => state.activeBuildingId);
   const activeFloorId = useEditorStore((state) => state.activeFloorId);
@@ -347,6 +351,19 @@ export function SceneCanvas() {
       material.transparent = true;
     });
     scene.add(grid);
+    const clippingHelper = new THREE.PlaneHelper(
+      createClippingPlane({
+        enabled: false,
+        axis: "x",
+        offsetMm: 0,
+        inverted: false,
+        showHelper: true,
+      }),
+      12,
+      0xffb44c,
+    );
+    clippingHelper.visible = false;
+    scene.add(clippingHelper);
 
     const hemisphere = new THREE.HemisphereLight(0xdce7f2, 0x273039, 2.2);
     const sun = new THREE.DirectionalLight(0xffffff, 2.3);
@@ -398,6 +415,7 @@ export function SceneCanvas() {
       orbit,
       transform,
       grid,
+      clippingHelper,
       content,
       draft: draftGroup,
       raycaster: new THREE.Raycaster(),
@@ -445,6 +463,23 @@ export function SceneCanvas() {
     if (!engine) return;
     applyCanvasAppearance(engine, settings?.backgroundColor ?? DEFAULT_CANVAS_BACKGROUND);
   }, [settings?.backgroundColor]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    const host = hostRef.current;
+    if (!engine || !host) return;
+    const plane = createClippingPlane(clipping);
+    engine.renderer.clippingPlanes = clipping.enabled ? [plane] : [];
+    engine.clippingHelper.plane.copy(plane);
+    engine.clippingHelper.visible = clipping.enabled && clipping.showHelper;
+    host.dataset.clippingEnabled = String(clipping.enabled);
+  }, [clipping]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.transform.setMode(transformMode);
+  }, [transformMode]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -837,9 +872,12 @@ export function SceneCanvas() {
         current.draft.points,
         builderSnapRadiusMm(engine, rect.width, current.project?.settings.snapTolerance ?? 12),
       );
-      if (aggressiveSnap) return aggressiveSnap;
       const origin =
         current.tool === "wall" ? current.draft.wallStart : current.draft.points.at(-1);
+      if (current.mode === "builder" && current.tool === "wall" && origin) {
+        return lockToConstructionAxis(origin, aggressiveSnap ?? rawPoint, current.draft.axisAngle);
+      }
+      if (aggressiveSnap) return aggressiveSnap;
       if (current.mode === "builder" && origin) {
         return lockToConstructionAxis(origin, rawPoint, current.draft.axisAngle);
       }
@@ -905,10 +943,11 @@ export function SceneCanvas() {
     };
 
     const onWheel = (event: WheelEvent) => {
-      if (mode !== "builder" || !event.shiftKey || !["foundation", "wall"].includes(tool)) return;
+      if (mode !== "builder" || !event.ctrlKey || !["foundation", "wall"].includes(tool)) return;
       event.preventDefault();
       const increment = project?.settings.angleIncrement ?? 5;
-      setDraft({ axisAngle: draft.axisAngle + (event.deltaY > 0 ? increment : -increment) });
+      const next = draft.axisAngle + (event.deltaY > 0 ? increment : -increment);
+      setDraft({ axisAngle: ((next % 180) + 180) % 180 });
     };
 
     host.addEventListener("pointermove", onPointerMove);
@@ -940,7 +979,8 @@ export function SceneCanvas() {
       const state = useEditorStore.getState();
       const engine = engineRef.current;
       if (!engine) return;
-      if (event.key.toLowerCase() === "f" && state.selection) {
+      const modellingShortcut = !event.ctrlKey && !event.metaKey && !event.altKey;
+      if (modellingShortcut && event.key.toLowerCase() === "f" && state.selection) {
         const object = engine.content.children.find(
           (child) => child.userData.entityId === state.selection?.id,
         );
@@ -957,10 +997,10 @@ export function SceneCanvas() {
             );
         }
       }
-      if (event.key.toLowerCase() === "g") engine.transform.setMode("translate");
-      if (event.key.toLowerCase() === "r") engine.transform.setMode("rotate");
-      if (event.key.toLowerCase() === "s" && state.selection?.type === "asset")
-        engine.transform.setMode("scale");
+      if (modellingShortcut && event.key.toLowerCase() === "g") state.setTransformMode("translate");
+      if (modellingShortcut && event.key.toLowerCase() === "r") state.setTransformMode("rotate");
+      if (modellingShortcut && event.key.toLowerCase() === "s" && state.selection?.type === "asset")
+        state.setTransformMode("scale");
       if (
         event.key === "Escape" &&
         state.mode === "architecture" &&
@@ -1153,6 +1193,8 @@ export function SceneCanvas() {
   return (
     <div
       className="scene-host"
+      data-axis-angle={draft.axisAngle}
+      data-transform-mode={transformMode}
       data-view={mode === "builder" ? "top-locked" : "perspective"}
       ref={hostRef}
     >
