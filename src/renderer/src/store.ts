@@ -714,14 +714,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         pitchDegrees: 30,
         overhang: 300,
         thickness: 200,
-        ridgeRotationDegrees:
-          Math.max(...target.footprint.map((point) => point.x)) -
-            Math.min(...target.footprint.map((point) => point.x)) >=
-          Math.max(...target.footprint.map((point) => point.y)) -
-            Math.min(...target.footprint.map((point) => point.y))
-            ? 0
-            : 90,
-        flipped: false,
       };
     });
     set({ activeFloorId: floorId, tool: "select" });

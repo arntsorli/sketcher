@@ -156,6 +156,17 @@ try {
   await window.keyboard.press("Control+c");
   await window.keyboard.press("Control+v");
   await window.getByText("Cube copy", { exact: true }).last().waitFor({ state: "visible" });
+  await window.getByRole("button", { name: "Add object" }).click();
+  await window.getByRole("button", { name: "Car", exact: true }).click();
+  await canvas.click({ position: { x: bounds.width * 0.72, y: bounds.height * 0.68 } });
+  await window.getByText("Car", { exact: true }).last().waitFor({ state: "visible" });
+  await window.getByRole("button", { name: "Add object" }).click();
+  await window.getByRole("button", { name: "Deciduous tree", exact: true }).click();
+  await canvas.click({ position: { x: bounds.width * 0.28, y: bounds.height * 0.58 } });
+  await window.getByText("Deciduous tree", { exact: true }).last().waitFor({ state: "visible" });
+  await window.locator('.scene-host[data-bundled-models="ready"]').waitFor({ state: "visible" });
+  await window.waitForTimeout(250);
+  await window.screenshot({ path: path.join(artifacts, "bundled-models.png") });
   await window.getByRole("button", { name: "Clipping plane" }).click();
   await window.getByLabel("Enabled").check();
   await window.locator('.scene-host[data-clipping-enabled="true"]').waitFor({ state: "visible" });

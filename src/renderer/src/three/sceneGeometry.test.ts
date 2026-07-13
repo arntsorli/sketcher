@@ -1,4 +1,4 @@
-import { Box3, type Mesh, type Object3D } from "three";
+import { Box3, type Mesh, type Object3D, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import type {
   AssetDefinition,
@@ -61,8 +61,6 @@ function buildingFor(footprint: Vec2[]): BuildingDefinition {
       pitchDegrees: 30,
       overhang: 300,
       thickness: 200,
-      ridgeRotationDegrees: 0,
-      flipped: false,
     },
   };
 }
@@ -82,6 +80,20 @@ function countByType(group: Object3D, entityType: string): number {
     if (child.userData.entityType === entityType) count += 1;
   });
   return count;
+}
+
+function topSurfaceNormalClusters(roof: Mesh, topBaseZ = 3.1): Vector3[] {
+  const positions = roof.geometry.getAttribute("position");
+  const clusters: Vector3[] = [];
+  for (let index = 0; index < positions.count; index += 3) {
+    const a = new Vector3().fromBufferAttribute(positions, index);
+    const b = new Vector3().fromBufferAttribute(positions, index + 1);
+    const c = new Vector3().fromBufferAttribute(positions, index + 2);
+    if (Math.min(a.z, b.z, c.z) < topBaseZ - 1e-6) continue;
+    const normal = b.sub(a).cross(c.sub(a)).normalize();
+    if (!clusters.some((candidate) => candidate.angleTo(normal) < 1e-5)) clusters.push(normal);
+  }
+  return clusters;
 }
 
 describe("building envelope geometry", () => {
@@ -129,6 +141,42 @@ describe("building envelope geometry", () => {
     expect(roofBounds.max.z).toBeGreaterThan(2.9);
     expect(roofBounds.max.x).toBeGreaterThan(6);
     expect(roofBounds.max.y).toBeGreaterThan(5);
+  });
+
+  it("keeps rectangular and cross-gable roof sections exactly coplanar", () => {
+    const rectangle = childByType(
+      createBuildingGroup(
+        buildingFor([
+          { x: 0, y: 0 },
+          { x: 6000, y: 0 },
+          { x: 6000, y: 4000 },
+          { x: 0, y: 4000 },
+        ]),
+      ),
+      "roof",
+    ) as Mesh;
+    const rectangleNormals = topSurfaceNormalClusters(rectangle);
+    expect(rectangleNormals).toHaveLength(2);
+    expect(rectangleNormals.every((normal) => Math.abs(normal.x) < 1e-6)).toBe(true);
+
+    const crossGable = childByType(
+      createBuildingGroup(
+        buildingFor([
+          { x: 0, y: 0 },
+          { x: 6000, y: 0 },
+          { x: 6000, y: 2500 },
+          { x: 2500, y: 2500 },
+          { x: 2500, y: 5000 },
+          { x: 0, y: 5000 },
+        ]),
+      ),
+      "roof",
+    ) as Mesh;
+    const crossGableNormals = topSurfaceNormalClusters(crossGable);
+    expect(crossGableNormals).toHaveLength(4);
+    expect(
+      crossGableNormals.every((normal) => Math.abs(normal.x) < 1e-6 || Math.abs(normal.y) < 1e-6),
+    ).toBe(true);
   });
 
   it("keeps the automatic roof stable for rotated extensions and angled footprints", () => {

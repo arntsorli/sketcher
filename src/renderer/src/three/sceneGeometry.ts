@@ -14,20 +14,31 @@ const JOIN_TOLERANCE_MM = 1;
 function material(color: number, opacity = 1): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color,
-    roughness: 0.78,
-    metalness: 0.03,
+    roughness: 0.72,
+    metalness: 0,
     transparent: opacity < 1,
     opacity,
   });
 }
 
 const materials = {
-  slab: material(0x73808c),
-  externalWall: material(0xd9d5cc),
-  internalWall: material(0xc7c3ba),
-  roof: material(0x59636f),
-  stair: material(0xb9b0a2),
-  terrain: material(0x6d7b64),
+  slab: material(0x929ba2),
+  externalWall: material(0xe5e1d8),
+  internalWall: material(0xd6d1c8),
+  roof: material(0x4d5965),
+  stair: material(0xbcb5aa),
+  terrain: material(0x71806a),
+  openingFrame: material(0x424b51),
+  door: material(0x8c6549),
+  glass: new THREE.MeshPhysicalMaterial({
+    color: 0xa9cbd7,
+    roughness: 0.12,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.42,
+    transmission: 0.18,
+    depthWrite: false,
+  }),
 };
 
 function shapeFromFootprint(building: BuildingDefinition, floorIndex = 0): THREE.Shape {
@@ -264,16 +275,97 @@ function boxPiece(
     geometry,
     wall.type === "external" ? materials.externalWall : materials.internalWall,
   );
-  const yOffset =
-    wall.alignment === "inside"
-      ? (insideSign * wall.thickness) / 2
-      : wall.alignment === "outside"
-        ? (-insideSign * wall.thickness) / 2
-        : 0;
+  const yOffset = wallCenterOffset(wall, insideSign);
   mesh.position.set(centerAlong * MM_TO_M, yOffset * MM_TO_M, (baseHeight + height / 2) * MM_TO_M);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   group.add(mesh);
+}
+
+function wallCenterOffset(wall: Wall, insideSign: 1 | -1): number {
+  if (wall.alignment === "inside") return (insideSign * wall.thickness) / 2;
+  if (wall.alignment === "outside") return (-insideSign * wall.thickness) / 2;
+  return 0;
+}
+
+function addOpeningDetails(
+  wallGroup: THREE.Group,
+  wall: Wall,
+  insideSign: 1 | -1,
+  openings: Opening[],
+): void {
+  const y = wallCenterOffset(wall, insideSign) * MM_TO_M;
+  const frameDepth = (wall.thickness + 18) * MM_TO_M;
+  for (const opening of openings) {
+    const frame = Math.min(70, opening.width * 0.08, opening.height * 0.08);
+    const centerX = (opening.offset + opening.width / 2) * MM_TO_M;
+    const centerZ = (opening.sillHeight + opening.height / 2) * MM_TO_M;
+    const detailGroup = new THREE.Group();
+    detailGroup.userData = { entityType: "opening", entityId: opening.id };
+
+    const addFramePiece = (width: number, height: number, x: number, z: number) => {
+      const piece = new THREE.Mesh(
+        new THREE.BoxGeometry(width * MM_TO_M, frameDepth, height * MM_TO_M),
+        materials.openingFrame,
+      );
+      piece.position.set(x * MM_TO_M, y, z * MM_TO_M);
+      piece.castShadow = true;
+      piece.receiveShadow = true;
+      detailGroup.add(piece);
+    };
+
+    addFramePiece(
+      frame,
+      opening.height,
+      opening.offset + frame / 2,
+      opening.sillHeight + opening.height / 2,
+    );
+    addFramePiece(
+      frame,
+      opening.height,
+      opening.offset + opening.width - frame / 2,
+      opening.sillHeight + opening.height / 2,
+    );
+    addFramePiece(
+      Math.max(frame, opening.width - frame * 2),
+      frame,
+      opening.offset + opening.width / 2,
+      opening.sillHeight + opening.height - frame / 2,
+    );
+    if (opening.kind === "window") {
+      addFramePiece(
+        Math.max(frame, opening.width - frame * 2),
+        frame,
+        opening.offset + opening.width / 2,
+        opening.sillHeight + frame / 2,
+      );
+      const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(20, opening.width - frame * 2) * MM_TO_M,
+          0.018,
+          Math.max(20, opening.height - frame * 2) * MM_TO_M,
+        ),
+        materials.glass,
+      );
+      glass.position.set(centerX, y, centerZ);
+      glass.receiveShadow = true;
+      detailGroup.add(glass);
+    } else if (opening.kind === "door") {
+      const door = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(20, opening.width - frame * 2) * MM_TO_M,
+          0.045,
+          Math.max(20, opening.height - frame) * MM_TO_M,
+        ),
+        materials.door,
+      );
+      door.position.set(centerX, y, (opening.sillHeight + (opening.height - frame) / 2) * MM_TO_M);
+      door.castShadow = true;
+      door.receiveShadow = true;
+      detailGroup.add(door);
+    }
+    wallGroup.add(detailGroup);
+  }
 }
 
 function wallWithOpenings(
@@ -344,6 +436,7 @@ function wallWithOpenings(
     0,
     floorHeight,
   );
+  addOpeningDetails(wallGroup, wall, insideSign, sorted);
 }
 
 interface RoofPoint {
@@ -627,26 +720,198 @@ function offsetFootprint(footprint: RoofPoint[], distance: number): RoofPoint[] 
   });
 }
 
-function refineRoofTriangle(
-  a: RoofPoint,
-  b: RoofPoint,
-  c: RoofPoint,
-  output: Array<[RoofPoint, RoofPoint, RoofPoint]>,
-  depth = 0,
-): void {
-  const edges = [
-    { length: Math.hypot(b.x - a.x, b.y - a.y), start: a, end: b, other: c },
-    { length: Math.hypot(c.x - b.x, c.y - b.y), start: b, end: c, other: a },
-    { length: Math.hypot(a.x - c.x, a.y - c.y), start: c, end: a, other: b },
-  ].sort((left, right) => right.length - left.length);
-  const edge = edges[0];
-  if (!edge || edge.length <= 400 || depth >= 7) {
-    output.push([a, b, c]);
+interface RoofPlane {
+  a: number;
+  b: number;
+  c: number;
+  minU: number;
+  maxU: number;
+  minV: number;
+  maxV: number;
+}
+
+interface RoofLine {
+  a: number;
+  b: number;
+  c: number;
+}
+
+const ROOF_EPSILON = 1e-6;
+
+function createRoofPlanes(
+  layout: AutomaticRoofLayout,
+  overhang: number,
+  slope: number,
+): RoofPlane[] {
+  return layout.modules.flatMap((module) => {
+    const minU = module.minU - overhang;
+    const maxU = module.maxU + overhang;
+    const minV = module.minV - overhang;
+    const maxV = module.maxV + overhang;
+    if (module.ridgeAxis === "u") {
+      const ridgeV = (minV + maxV) / 2;
+      return [
+        { a: 0, b: slope, c: -minV * slope, minU, maxU, minV, maxV: ridgeV },
+        { a: 0, b: -slope, c: maxV * slope, minU, maxU, minV: ridgeV, maxV },
+      ];
+    }
+    const ridgeU = (minU + maxU) / 2;
+    return [
+      { a: slope, b: 0, c: -minU * slope, minU, maxU: ridgeU, minV, maxV },
+      { a: -slope, b: 0, c: maxU * slope, minU: ridgeU, maxU, minV, maxV },
+    ];
+  });
+}
+
+function roofPlaneHeight(plane: RoofPlane, point: RoofPoint): number {
+  return plane.a * point.x + plane.b * point.y + plane.c;
+}
+
+function winningRoofPlane(planes: RoofPlane[], point: RoofPoint): RoofPlane | undefined {
+  let winner: RoofPlane | undefined;
+  let height = 0;
+  for (const plane of planes) {
+    if (
+      point.x < plane.minU - ROOF_EPSILON ||
+      point.x > plane.maxU + ROOF_EPSILON ||
+      point.y < plane.minV - ROOF_EPSILON ||
+      point.y > plane.maxV + ROOF_EPSILON
+    ) {
+      continue;
+    }
+    const candidateHeight = roofPlaneHeight(plane, point);
+    if (!winner || candidateHeight > height) {
+      winner = plane;
+      height = candidateHeight;
+    }
+  }
+  return winner;
+}
+
+function addUniqueRoofLine(lines: RoofLine[], line: RoofLine): void {
+  const length = Math.hypot(line.a, line.b);
+  if (length < ROOF_EPSILON) return;
+  let normalized = { a: line.a / length, b: line.b / length, c: line.c / length };
+  if (
+    normalized.a < -ROOF_EPSILON ||
+    (Math.abs(normalized.a) <= ROOF_EPSILON && normalized.b < 0)
+  ) {
+    normalized = { a: -normalized.a, b: -normalized.b, c: -normalized.c };
+  }
+  if (
+    lines.some(
+      (existing) =>
+        Math.abs(existing.a - normalized.a) < ROOF_EPSILON &&
+        Math.abs(existing.b - normalized.b) < ROOF_EPSILON &&
+        Math.abs(existing.c - normalized.c) < 0.001,
+    )
+  ) {
     return;
   }
-  const midpoint = { x: (edge.start.x + edge.end.x) / 2, y: (edge.start.y + edge.end.y) / 2 };
-  refineRoofTriangle(edge.start, midpoint, edge.other, output, depth + 1);
-  refineRoofTriangle(midpoint, edge.end, edge.other, output, depth + 1);
+  lines.push(normalized);
+}
+
+function createRoofBreakLines(planes: RoofPlane[]): RoofLine[] {
+  const lines: RoofLine[] = [];
+  for (const plane of planes) {
+    addUniqueRoofLine(lines, { a: 1, b: 0, c: -plane.minU });
+    addUniqueRoofLine(lines, { a: 1, b: 0, c: -plane.maxU });
+    addUniqueRoofLine(lines, { a: 0, b: 1, c: -plane.minV });
+    addUniqueRoofLine(lines, { a: 0, b: 1, c: -plane.maxV });
+  }
+  for (let leftIndex = 0; leftIndex < planes.length; leftIndex += 1) {
+    const left = planes[leftIndex];
+    if (!left) continue;
+    for (let rightIndex = leftIndex + 1; rightIndex < planes.length; rightIndex += 1) {
+      const right = planes[rightIndex];
+      if (
+        !right ||
+        Math.max(left.minU, right.minU) >= Math.min(left.maxU, right.maxU) - ROOF_EPSILON ||
+        Math.max(left.minV, right.minV) >= Math.min(left.maxV, right.maxV) - ROOF_EPSILON
+      ) {
+        continue;
+      }
+      addUniqueRoofLine(lines, {
+        a: left.a - right.a,
+        b: left.b - right.b,
+        c: left.c - right.c,
+      });
+    }
+  }
+  return lines;
+}
+
+function cleanRoofPolygon(points: RoofPoint[]): RoofPoint[] {
+  const result: RoofPoint[] = [];
+  for (const point of points) {
+    const previous = result.at(-1);
+    if (!previous || Math.hypot(previous.x - point.x, previous.y - point.y) > ROOF_EPSILON) {
+      result.push(point);
+    }
+  }
+  const first = result[0];
+  const last = result.at(-1);
+  if (first && last && Math.hypot(first.x - last.x, first.y - last.y) <= ROOF_EPSILON) {
+    result.pop();
+  }
+  return result;
+}
+
+function splitRoofPolygon(polygon: RoofPoint[], line: RoofLine): RoofPoint[][] {
+  const positive: RoofPoint[] = [];
+  const negative: RoofPoint[] = [];
+  const value = (point: RoofPoint) => line.a * point.x + line.b * point.y + line.c;
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index];
+    const next = polygon[(index + 1) % polygon.length];
+    if (!current || !next) continue;
+    const currentValue = value(current);
+    const nextValue = value(next);
+    if (currentValue >= -ROOF_EPSILON) positive.push(current);
+    if (currentValue <= ROOF_EPSILON) negative.push(current);
+    if (
+      (currentValue > ROOF_EPSILON && nextValue < -ROOF_EPSILON) ||
+      (currentValue < -ROOF_EPSILON && nextValue > ROOF_EPSILON)
+    ) {
+      const amount = currentValue / (currentValue - nextValue);
+      const intersection = {
+        x: current.x + (next.x - current.x) * amount,
+        y: current.y + (next.y - current.y) * amount,
+      };
+      positive.push(intersection);
+      negative.push(intersection);
+    }
+  }
+  return [cleanRoofPolygon(positive), cleanRoofPolygon(negative)].filter(
+    (part) => part.length >= 3 && Math.abs(signedPolygonArea(part)) > 0.01,
+  );
+}
+
+function createRoofCells(footprint: RoofPoint[], lines: RoofLine[]): RoofPoint[][] {
+  const vectors = footprint.map((point) => new THREE.Vector2(point.x, point.y));
+  let cells = THREE.ShapeUtils.triangulateShape(vectors, []).flatMap((triangle) => {
+    const cell = triangle.map((index) => footprint[index]).filter(Boolean) as RoofPoint[];
+    return cell.length === 3 ? [cell] : [];
+  });
+  for (const line of lines) cells = cells.flatMap((cell) => splitRoofPolygon(cell, line));
+  return cells;
+}
+
+function roofCellCenter(cell: RoofPoint[]): RoofPoint {
+  return cell.reduce(
+    (center, point) => ({
+      x: center.x + point.x / cell.length,
+      y: center.y + point.y / cell.length,
+    }),
+    { x: 0, y: 0 },
+  );
+}
+
+function worldRoofPoint(point: RoofPoint, layout: AutomaticRoofLayout): RoofPoint {
+  return {
+    x: point.x * layout.axisU.x + point.y * layout.axisV.x,
+    y: point.x * layout.axisU.y + point.y * layout.axisV.y,
+  };
 }
 
 function addRoof(group: THREE.Group, building: BuildingDefinition): void {
@@ -655,37 +920,15 @@ function addRoof(group: THREE.Group, building: BuildingDefinition): void {
   if (!roof || !roofFloor) return;
   const layout = deriveAutomaticRoofLayout(building.footprint);
   const footprint = offsetFootprint(building.footprint, Math.max(0, roof.overhang));
-  const vectors = footprint.map((point) => new THREE.Vector2(point.x, point.y));
-  const triangles = THREE.ShapeUtils.triangulateShape(vectors, []);
-  const refined: Array<[RoofPoint, RoofPoint, RoofPoint]> = [];
-  for (const triangle of triangles) {
-    const a = footprint[triangle[0] ?? 0];
-    const b = footprint[triangle[1] ?? 0];
-    const c = footprint[triangle[2] ?? 0];
-    if (a && b && c) refineRoofTriangle(a, b, c, refined);
-  }
   const baseZ = roofFloor.elevation;
+  const topBaseZ = baseZ + roof.thickness;
   const slope = Math.tan((roof.pitchDegrees * Math.PI) / 180);
-  const topHeight = (point: RoofPoint) => {
-    const local = localPoint(point, layout);
-    let height = baseZ + roof.thickness;
-    for (const module of layout.modules) {
-      const minU = module.minU - roof.overhang;
-      const maxU = module.maxU + roof.overhang;
-      const minV = module.minV - roof.overhang;
-      const maxV = module.maxV + roof.overhang;
-      if (local.x < minU - 1 || local.x > maxU + 1 || local.y < minV - 1 || local.y > maxV + 1)
-        continue;
-      const run =
-        module.ridgeAxis === "u"
-          ? Math.min(local.y - minV, maxV - local.y)
-          : Math.min(local.x - minU, maxU - local.x);
-      height = Math.max(height, baseZ + roof.thickness + Math.max(0, run) * slope);
-    }
-    return height;
-  };
+  const planes = createRoofPlanes(layout, roof.overhang, slope);
+  const breakLines = createRoofBreakLines(planes);
+  const localFootprint = footprint.map((point) => localPoint(point, layout));
+  const cells = createRoofCells(localFootprint, breakLines);
   const positions: number[] = [];
-  const pushTriangle = (
+  const pushWorldTriangle = (
     a: RoofPoint,
     b: RoofPoint,
     c: RoofPoint,
@@ -696,28 +939,70 @@ function addRoof(group: THREE.Group, building: BuildingDefinition): void {
     for (const point of ordered)
       positions.push(point.x * MM_TO_M, point.y * MM_TO_M, z(point) * MM_TO_M);
   };
-  refined.forEach(([a, b, c]) => {
-    pushTriangle(a, b, c, topHeight);
-  });
+  for (const cell of cells) {
+    const first = cell[0];
+    if (!first) continue;
+    const plane = winningRoofPlane(planes, roofCellCenter(cell));
+    for (let index = 1; index < cell.length - 1; index += 1) {
+      const second = cell[index];
+      const third = cell[index + 1];
+      if (!second || !third) continue;
+      const cross =
+        (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x);
+      if (Math.abs(cross) <= ROOF_EPSILON) continue;
+      const ordered = cross > 0 ? [first, second, third] : [first, third, second];
+      for (const point of ordered) {
+        const world = worldRoofPoint(point, layout);
+        const height = topBaseZ + (plane ? roofPlaneHeight(plane, point) : 0);
+        positions.push(world.x * MM_TO_M, world.y * MM_TO_M, height * MM_TO_M);
+      }
+    }
+  }
+  const vectors = footprint.map((point) => new THREE.Vector2(point.x, point.y));
+  const triangles = THREE.ShapeUtils.triangulateShape(vectors, []);
   triangles.forEach((triangle) => {
     const a = footprint[triangle[0] ?? 0];
     const b = footprint[triangle[1] ?? 0];
     const c = footprint[triangle[2] ?? 0];
-    if (a && b && c) pushTriangle(a, c, b, () => baseZ);
+    if (a && b && c) pushWorldTriangle(a, c, b, () => baseZ);
   });
   const ccw = signedPolygonArea(footprint) > 0;
   for (let index = 0; index < footprint.length; index += 1) {
     const start = footprint[index];
     const end = footprint[(index + 1) % footprint.length];
     if (!start || !end) continue;
-    const steps = Math.max(1, Math.ceil(Math.hypot(end.x - start.x, end.y - start.y) / 400));
-    for (let step = 0; step < steps; step += 1) {
-      const at = (amount: number) => ({
-        x: start.x + (end.x - start.x) * amount,
-        y: start.y + (end.y - start.y) * amount,
-      });
-      const a = at(step / steps);
-      const b = at((step + 1) / steps);
+    const localStart = localPoint(start, layout);
+    const localEnd = localPoint(end, layout);
+    const amounts = [0, 1];
+    for (const line of breakLines) {
+      const startValue = line.a * localStart.x + line.b * localStart.y + line.c;
+      const endValue = line.a * localEnd.x + line.b * localEnd.y + line.c;
+      const denominator = startValue - endValue;
+      if (Math.abs(denominator) <= ROOF_EPSILON) continue;
+      const amount = startValue / denominator;
+      if (amount > ROOF_EPSILON && amount < 1 - ROOF_EPSILON) amounts.push(amount);
+    }
+    amounts.sort((left, right) => left - right);
+    const uniqueAmounts = amounts.filter(
+      (amount, amountIndex) =>
+        amountIndex === 0 || Math.abs(amount - (amounts[amountIndex - 1] ?? amount)) > ROOF_EPSILON,
+    );
+    const at = (amount: number) => ({
+      x: start.x + (end.x - start.x) * amount,
+      y: start.y + (end.y - start.y) * amount,
+    });
+    for (let segment = 0; segment < uniqueAmounts.length - 1; segment += 1) {
+      const startAmount = uniqueAmounts[segment];
+      const endAmount = uniqueAmounts[segment + 1];
+      if (startAmount === undefined || endAmount === undefined) continue;
+      const a = at(startAmount);
+      const b = at(endAmount);
+      const midpoint = localPoint(at((startAmount + endAmount) / 2), layout);
+      const plane = winningRoofPlane(planes, midpoint);
+      const topHeight = (point: RoofPoint) => {
+        const local = localPoint(point, layout);
+        return topBaseZ + (plane ? roofPlaneHeight(plane, local) : 0);
+      };
       const vertices = ccw ? [a, b] : [b, a];
       const first = vertices[0];
       const second = vertices[1];
@@ -923,10 +1208,12 @@ export function createBuiltinAsset(definition: AssetDefinition): THREE.Group {
       new THREE.CylinderGeometry(0.5, 0.5, 1.2, 24),
       material(0x7f91ac),
     );
+    cylinder.rotation.x = Math.PI / 2;
     cylinder.position.z = 0.6;
     group.add(cylinder);
   } else if (definition.kind === "cone") {
     const cone = new THREE.Mesh(new THREE.ConeGeometry(0.65, 1.4, 24), material(0x7f91ac));
+    cone.rotation.x = Math.PI / 2;
     cone.position.z = 0.7;
     group.add(cone);
   } else {

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutlinePass } from "three/addons/postprocessing/OutlinePass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import {
   calculateOpeningPlacement,
@@ -16,7 +18,12 @@ import {
   pointAtLength,
   snapToGrid,
 } from "../../../shared/geometry";
-import type { ProjectDocument, Vec2, Wall } from "../../../shared/model";
+import type { AssetDefinition, ProjectDocument, Vec2, Wall } from "../../../shared/model";
+import birchTreeModelUrl from "../assets/models/birch-tree.glb?url";
+import carModelUrl from "../assets/models/car.glb?url";
+import coniferModelUrl from "../assets/models/conifer.glb?url";
+import deciduousTreeModelUrl from "../assets/models/deciduous-tree.glb?url";
+import personModelUrl from "../assets/models/person.glb?url";
 import { isWallTool, useEditorStore } from "../store";
 import { clippingHandlePosition, clippingOffsetFromHandle, createClippingPlane } from "./clipping";
 import { setExportRoot } from "./sceneBridge";
@@ -58,6 +65,69 @@ function entityRoot(object: THREE.Object3D | null): { type?: string; id?: string
   return {};
 }
 
+interface BundledModel {
+  url: string;
+  fitAxis: "x" | "z";
+  targetSize: number;
+  rotationZ?: number;
+}
+
+const bundledModels: Partial<Record<AssetDefinition["kind"], BundledModel>> = {
+  car: { url: carModelUrl, fitAxis: "x", targetSize: 4.4, rotationZ: Math.PI / 2 },
+  "deciduous-tree": { url: deciduousTreeModelUrl, fitAxis: "z", targetSize: 5.5 },
+  conifer: { url: coniferModelUrl, fitAxis: "z", targetSize: 6 },
+  "birch-tree": { url: birchTreeModelUrl, fitAxis: "z", targetSize: 6 },
+  person: { url: personModelUrl, fitAxis: "z", targetSize: 1.72 },
+};
+
+const bundledModelLoader = new GLTFLoader();
+const bundledModelCache = new Map<string, Promise<THREE.Group>>();
+
+function cloneBundledModel(template: THREE.Group): THREE.Group {
+  const clone = template.clone(true);
+  clone.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    child.geometry = child.geometry.clone();
+    child.material = Array.isArray(child.material)
+      ? child.material.map((item) => item.clone())
+      : child.material.clone();
+    child.castShadow = true;
+    child.receiveShadow = true;
+  });
+  return clone;
+}
+
+async function loadBundledModel(kind: AssetDefinition["kind"]): Promise<THREE.Group | null> {
+  const specification = bundledModels[kind];
+  if (!specification) return null;
+  let pending = bundledModelCache.get(specification.url);
+  if (!pending) {
+    pending = bundledModelLoader.loadAsync(specification.url).then((gltf) => gltf.scene);
+    bundledModelCache.set(specification.url, pending);
+  }
+
+  const source = cloneBundledModel(await pending);
+  const axisCorrection = new THREE.Group();
+  axisCorrection.rotation.x = Math.PI / 2;
+  axisCorrection.add(source);
+  const oriented = new THREE.Group();
+  oriented.rotation.z = specification.rotationZ ?? 0;
+  oriented.add(axisCorrection);
+  oriented.updateMatrixWorld(true);
+
+  const initialBounds = new THREE.Box3().setFromObject(oriented);
+  const initialSize = initialBounds.getSize(new THREE.Vector3());
+  const sourceSize = specification.fitAxis === "x" ? initialSize.x : initialSize.z;
+  if (sourceSize > 0) oriented.scale.setScalar(specification.targetSize / sourceSize);
+  oriented.updateMatrixWorld(true);
+
+  const bounds = new THREE.Box3().setFromObject(oriented);
+  const center = bounds.getCenter(new THREE.Vector3());
+  oriented.position.set(-center.x, -center.y, -bounds.min.z);
+  oriented.updateMatrixWorld(true);
+  return oriented;
+}
+
 const DEFAULT_CANVAS_BACKGROUND = "#dfe7ee";
 
 function isLightBackground(backgroundColor: string): boolean {
@@ -83,6 +153,7 @@ type SceneEngine = {
   clippingTransform: TransformControls;
   content: THREE.Group;
   draft: THREE.Group;
+  ground: THREE.Mesh;
   raycaster: THREE.Raycaster;
   pointer: THREE.Vector2;
 };
@@ -337,7 +408,13 @@ export function SceneCanvas() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
     host.appendChild(renderer.domElement);
+
+    const environmentGenerator = new THREE.PMREMGenerator(renderer);
+    const environment = environmentGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = environment;
 
     const orbit = new OrbitControls(architectureCamera, renderer.domElement);
     orbit.target.set(2, 2, 0);
@@ -351,10 +428,18 @@ export function SceneCanvas() {
     grid.position.z = -0.001;
     const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material];
     gridMaterials.forEach((material) => {
-      material.opacity = 0.55;
+      material.opacity = 0.28;
       material.transparent = true;
     });
     scene.add(grid);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(200, 200),
+      new THREE.ShadowMaterial({ color: 0x24313a, opacity: 0.13 }),
+    );
+    ground.position.z = -0.004;
+    ground.receiveShadow = true;
+    ground.name = "Ground shadow catcher";
+    scene.add(ground);
     const clippingHelper = new THREE.PlaneHelper(
       createClippingPlane({
         enabled: false,
@@ -375,11 +460,14 @@ export function SceneCanvas() {
     clippingHandle.renderOrder = 2000;
     scene.add(clippingHelper, clippingHandle);
 
-    const hemisphere = new THREE.HemisphereLight(0xdce7f2, 0x273039, 2.2);
-    const sun = new THREE.DirectionalLight(0xffffff, 2.3);
+    const hemisphere = new THREE.HemisphereLight(0xe8f1f7, 0x53616a, 1.45);
+    const sun = new THREE.DirectionalLight(0xfff4df, 2.65);
     sun.position.set(-18, -14, 28);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0002;
+    sun.shadow.normalBias = 0.018;
+    sun.shadow.radius = 2;
     sun.shadow.camera.left = -40;
     sun.shadow.camera.right = 40;
     sun.shadow.camera.top = 40;
@@ -398,11 +486,12 @@ export function SceneCanvas() {
       scene,
       architectureCamera,
     );
-    outline.edgeStrength = 4;
-    outline.edgeThickness = 1.5;
+    outline.edgeStrength = 3;
+    outline.edgeThickness = 1;
     outline.visibleEdgeColor.set(0x45b8ff);
     outline.hiddenEdgeColor.set(0x2b78c5);
     composer.addPass(outline);
+    composer.addPass(new OutputPass());
 
     const transform = new TransformControls(architectureCamera, renderer.domElement);
     transform.setSize(0.8);
@@ -448,6 +537,7 @@ export function SceneCanvas() {
       clippingTransform,
       content,
       draft: draftGroup,
+      ground,
       raycaster: new THREE.Raycaster(),
       pointer: new THREE.Vector2(),
     };
@@ -483,6 +573,10 @@ export function SceneCanvas() {
       clippingTransform.dispose();
       orbit.dispose();
       composer.dispose();
+      environment.dispose();
+      environmentGenerator.dispose();
+      ground.geometry.dispose();
+      (ground.material as THREE.Material).dispose();
       renderer.dispose();
       host.removeChild(renderer.domElement);
       engineRef.current = null;
@@ -563,6 +657,7 @@ export function SceneCanvas() {
         material.opacity = index === 0 ? 0.9 : 0.68;
         material.transparent = true;
       });
+      engine.ground.visible = false;
     } else {
       engine.camera = engine.architectureCamera;
       engine.orbit.object = engine.architectureCamera;
@@ -572,8 +667,9 @@ export function SceneCanvas() {
         ? engine.grid.material
         : [engine.grid.material];
       gridMaterials.forEach((material) => {
-        material.opacity = 0.55;
+        material.opacity = 0.28;
       });
+      engine.ground.visible = true;
     }
     engine.renderPass.camera = engine.camera;
     engine.outline.renderCamera = engine.camera;
@@ -584,7 +680,8 @@ export function SceneCanvas() {
 
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || !project) return;
+    const host = hostRef.current;
+    if (!engine || !host || !project) return;
     let cancelled = false;
     disposeGeometry(engine.content);
     engine.content.clear();
@@ -601,6 +698,47 @@ export function SceneCanvas() {
     setExportRoot(engine.content);
 
     if (mode === "architecture") {
+      const bundledInstances = project.scene.assetInstances.filter((instance) => {
+        if (!instance.visible) return false;
+        const definition = project.assetDefinitions.find(
+          (item) => item.id === instance.definitionId,
+        );
+        return definition?.source === "builtin" && Boolean(bundledModels[definition.kind]);
+      });
+      let bundledModelsLoaded = 0;
+      host.dataset.bundledModels = bundledInstances.length > 0 ? "loading" : "ready";
+      for (const instance of bundledInstances) {
+        const definition = project.assetDefinitions.find(
+          (item) => item.id === instance.definitionId,
+        );
+        if (!definition) continue;
+        void loadBundledModel(definition.kind)
+          .then((model) => {
+            if (cancelled || !model) return;
+            const group = engine.content.children.find(
+              (child) =>
+                child.userData.entityType === "asset" && child.userData.entityId === instance.id,
+            );
+            if (!group) return;
+            disposeGeometry(group);
+            group.clear();
+            group.add(model);
+            group.traverse((child) => {
+              child.userData.rootEntityType = "asset";
+              child.userData.rootEntityId = instance.id;
+            });
+            bundledModelsLoaded += 1;
+            host.dataset.bundledModels =
+              bundledModelsLoaded === bundledInstances.length ? "ready" : "loading";
+          })
+          .catch((error) => {
+            console.error(`Unable to load bundled ${definition.kind} model`, error);
+            bundledModelsLoaded += 1;
+            host.dataset.bundledModels =
+              bundledModelsLoaded === bundledInstances.length ? "fallback" : "loading";
+          });
+      }
+
       const loader = new GLTFLoader();
       for (const instance of project.scene.assetInstances.filter((item) => item.visible)) {
         const definition = project.assetDefinitions.find(
@@ -612,8 +750,11 @@ export function SceneCanvas() {
           base64ToArrayBuffer(base64),
           "",
           (gltf) => {
-            if (cancelled) return;
-            const group = gltf.scene;
+            if (cancelled) {
+              disposeGeometry(gltf.scene);
+              return;
+            }
+            const group = new THREE.Group();
             group.position.set(
               instance.transform.position.x / 1000,
               instance.transform.position.y / 1000,
@@ -622,9 +763,17 @@ export function SceneCanvas() {
             group.rotation.z = instance.transform.rotationZ;
             group.scale.setScalar(instance.transform.scale);
             group.userData = { entityType: "asset", entityId: instance.id };
+            const axisCorrection = new THREE.Group();
+            axisCorrection.rotation.x = Math.PI / 2;
+            axisCorrection.add(gltf.scene);
+            group.add(axisCorrection);
             group.traverse((child) => {
               child.userData.rootEntityType = "asset";
               child.userData.rootEntityId = instance.id;
+              if (child instanceof THREE.Mesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
             });
             engine.content.add(group);
           },

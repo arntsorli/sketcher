@@ -59,8 +59,6 @@ const roofSchema = z.object({
   pitchDegrees: z.number().min(1).max(80),
   overhang: z.number().nonnegative(),
   thickness: z.number().positive(),
-  ridgeRotationDegrees: z.number(),
-  flipped: z.boolean(),
 });
 
 const buildingDefinitionSchema = z.object({

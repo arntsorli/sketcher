@@ -1,0 +1,8 @@
+The models in this directory are by Kenney and are released under the
+Creative Commons CC0 1.0 Universal public-domain dedication.
+
+Licence: https://creativecommons.org/publicdomain/zero/1.0/
+Creator: https://kenney.nl
+
+The source pack and original filename for every bundled model are recorded in
+README.md in this directory.

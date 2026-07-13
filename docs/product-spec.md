@@ -24,7 +24,7 @@ Architecture is the default mode. It shows the complete scene and treats a place
 
 A non-destructive clipping plane supports X/Y/Z normals, direction flip, a compact status popover, and an in-scene axis handle for its millimetre position without changing authoritative geometry.
 
-The bundled object library is procedurally generated and redistributable. Imported GLB/glTF assets are content-addressed and embedded once per project. A selected building or the visible scene can be exported as GLB.
+The bundled object library combines lightweight CC0 models for the most visible trees, cars, and people with procedural utility objects and fallback previews. Imported GLB/glTF assets are content-addressed, embedded once per project, and normalized from glTF's Y-up convention into the application's Z-up scene. A selected building or the visible scene can be exported as GLB.
 
 ### Terrain
 

@@ -429,10 +429,10 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **In progress**
 
 - Corrected outer-wall alignment for both clockwise and counter-clockwise footprints so an inside-aligned wall solid grows toward the interior.
-- Roof elevation starts at the final wall top. The closed, triangulated roof volume includes fascia/gable infill and no longer leaves daylight between the final storey and roof.
+- Roof elevation starts at the final wall top. The closed roof volume includes fascia/gable infill and no longer leaves daylight between the final storey and roof. Top faces are clipped along exact ridge, valley, and module-intersection lines so every triangle belongs to one planar roof section rather than approximating transitions with a dense mesh.
 - The generator derives its main axis from the longest footprint edge, decomposes orthogonal concave plans into a primary roof and smaller merged cross-roofs, and uses a stable longest-direction fallback for irregular angled plans.
 - A line-intersection offset preserves the specified overhang around the real footprint instead of expanding a global bounding box.
-- Geometry unit tests cover both footprint windings, an L-shaped extension, rotated L plans, irregular angled footprints, finite vertices, eave elevation, and enclosing bounds. The desktop smoke captures the roof in Architecture mode.
+- Geometry unit tests cover both footprint windings, exact coplanarity for rectangular and L-shaped roofs, rotated L plans, irregular angled footprints, finite vertices, eave elevation, and enclosing bounds. The desktop smoke captures the roof in Architecture mode.
 - Follow-on hardening is limited to nested/non-orthogonal roof intersections and worker-backed watertight volume goldens.
 
 ### SK-025 — Flat map-image layer MVP
