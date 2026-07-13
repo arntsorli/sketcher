@@ -18,8 +18,6 @@ import {
 } from "../../../shared/geometry";
 import type { ProjectDocument, Vec2, Wall } from "../../../shared/model";
 import { isWallTool, useEditorStore } from "../store";
-import { buildWallSolid } from "../workers/geometryClient";
-import type { WallSolidRequest } from "../workers/geometryTypes";
 import { clippingHandlePosition, clippingOffsetFromHandle, createClippingPlane } from "./clipping";
 import { setExportRoot } from "./sceneBridge";
 import { createBuildingGroup, createBuiltinAsset, createProjectContent } from "./sceneGeometry";
@@ -275,8 +273,7 @@ export function SceneCanvas() {
   const placementAssetId = useEditorStore((state) => state.placementAssetId);
   const draft = useEditorStore((state) => state.draft);
   const setDraft = useEditorStore((state) => state.setDraft);
-  const addFoundationPoint = useEditorStore((state) => state.addFoundationPoint);
-  const addPolygonPoint = useEditorStore((state) => state.addPolygonPoint);
+  const addDraftPoint = useEditorStore((state) => state.addDraftPoint);
   const addWallSegment = useEditorStore((state) => state.addWallSegment);
   const addOpening = useEditorStore((state) => state.addOpening);
   const addStair = useEditorStore((state) => state.addStair);
@@ -589,7 +586,6 @@ export function SceneCanvas() {
     const engine = engineRef.current;
     if (!engine || !project) return;
     let cancelled = false;
-    const controller = new AbortController();
     disposeGeometry(engine.content);
     engine.content.clear();
     const next = createProjectContent(
@@ -603,42 +599,6 @@ export function SceneCanvas() {
       if (child) engine.content.add(child);
     }
     setExportRoot(engine.content);
-
-    engine.content.traverse((object) => {
-      const request = object.userData.manifoldRequest as WallSolidRequest | undefined;
-      if (!(object instanceof THREE.Group) || !request) return;
-      void buildWallSolid(request, controller.signal)
-        .then((result) => {
-          if (cancelled || !object.parent) return;
-          for (let index = 0; index < result.positions.length; index += 1) {
-            result.positions[index] = (result.positions[index] ?? 0) / 1000;
-          }
-          const geometry = new THREE.BufferGeometry();
-          geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
-          geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
-          geometry.computeVertexNormals();
-          disposeGeometry(object);
-          object.clear();
-          const mesh = new THREE.Mesh(
-            geometry,
-            new THREE.MeshStandardMaterial({
-              color: object.userData.wallType === "external" ? 0xd9d5cc : 0xc7c3ba,
-              roughness: 0.78,
-              metalness: 0.03,
-            }),
-          );
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          mesh.userData.manifoldVolumeMm3 = result.volume;
-          object.add(mesh);
-          hostRef.current?.setAttribute("data-geometry-worker", "ready");
-        })
-        .catch((error) => {
-          if (error instanceof DOMException && error.name === "AbortError") return;
-          hostRef.current?.setAttribute("data-geometry-worker", "fallback");
-          console.warn("Manifold wall generation failed; keeping fallback geometry.", error);
-        });
-    });
 
     if (mode === "architecture") {
       const loader = new GLTFLoader();
@@ -674,7 +634,6 @@ export function SceneCanvas() {
     }
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [project, mode, activeBuildingId, activeFloorId, assets, terrainAssets]);
 
@@ -986,7 +945,7 @@ export function SceneCanvas() {
       const point = pointerPoint(event);
       if (!point) return;
       if (mode === "builder") {
-        if (tool === "foundation") addFoundationPoint(point);
+        if (tool === "foundation") addDraftPoint(point);
         else if (isWallTool(tool)) {
           if (draft.wallStart) addWallSegment(draft.wallStart, point);
           else setDraft({ wallStart: point });
@@ -1004,7 +963,7 @@ export function SceneCanvas() {
       }
       const current = useEditorStore.getState();
       if (tool === "polygon") {
-        addPolygonPoint(point);
+        addDraftPoint(point);
         return;
       }
       if (tool === "place-building" && current.placementDefinitionId) {
@@ -1058,8 +1017,7 @@ export function SceneCanvas() {
     project,
     draft,
     setDraft,
-    addFoundationPoint,
-    addPolygonPoint,
+    addDraftPoint,
     addWallSegment,
     addOpening,
     addStair,
@@ -1112,7 +1070,7 @@ export function SceneCanvas() {
           state.setStatus("Polygon face cancelled");
         } else if (event.key === "Backspace") {
           event.preventDefault();
-          state.removeLastPolygonPoint();
+          state.removeLastDraftPoint();
         } else if (event.key === "Enter" && state.draft.points.length >= 3) {
           event.preventDefault();
           state.finishPolygonFace();
@@ -1140,7 +1098,7 @@ export function SceneCanvas() {
           state.setDraft({ numericInput: state.draft.numericInput.slice(0, -1) });
         } else if (state.tool === "foundation" && state.draft.points.length > 0) {
           event.preventDefault();
-          state.removeLastFoundationPoint();
+          state.removeLastDraftPoint();
         } else if (isWallTool(state.tool) && state.draft.wallStart) {
           event.preventDefault();
           state.setDraft({ wallStart: undefined, hover: undefined });
@@ -1279,7 +1237,7 @@ export function SceneCanvas() {
     const toward = state.draft.hover;
     if (!origin || !toward || !Number.isFinite(length) || length <= 0) return;
     const point = pointAtLength(origin, toward, length);
-    if (state.tool === "foundation") state.addFoundationPoint(point);
+    if (state.tool === "foundation") state.addDraftPoint(point);
     else if (isWallTool(state.tool)) state.addWallSegment(origin, point);
     state.setDraft({ numericInput: "" });
   };

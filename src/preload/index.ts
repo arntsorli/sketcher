@@ -27,20 +27,6 @@ const api: SketcherApi = {
   terrain: {
     search: (query) => ipcRenderer.invoke("terrain:search", query),
     fetchImage: (url) => ipcRenderer.invoke("terrain:fetchImage", url),
-    sampleElevation: (latitude, longitude, widthMeters, heightMeters, resolution) =>
-      ipcRenderer.invoke(
-        "terrain:sampleElevation",
-        latitude,
-        longitude,
-        widthMeters,
-        heightMeters,
-        resolution,
-      ),
-  },
-  secrets: {
-    get: (key) => ipcRenderer.invoke("secrets:get", key),
-    set: (key, value) => ipcRenderer.invoke("secrets:set", key, value),
-    delete: (key) => ipcRenderer.invoke("secrets:delete", key),
   },
   app: {
     version: () => ipcRenderer.invoke("app:version"),

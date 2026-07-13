@@ -4,14 +4,14 @@ const EPSILON = 1e-6;
 export const OPENING_SNAP_RADIUS_MM = 1200;
 export const MIN_OPENING_CLEARANCE_MM = 50;
 
-export interface OpeningClearances {
+interface OpeningClearances {
   leftBoundaryOffset: number;
   rightBoundaryOffset: number;
   left: number;
   right: number;
 }
 
-export interface OpeningPlacement {
+interface OpeningPlacement {
   wall: Wall;
   offset: number;
   width: number;
@@ -282,14 +282,6 @@ export function calculateStair(
 } {
   const riserCount = Math.max(1, Math.ceil(floorHeight / targetMaxRiser));
   return { riserCount, riserHeight: floorHeight / riserCount };
-}
-
-export function gablePanelRotation(
-  side: -1 | 1,
-  ridgeAlongX: boolean,
-  pitchRadians: number,
-): { x: number; y: number } {
-  return ridgeAlongX ? { x: -side * pitchRadians, y: 0 } : { x: 0, y: side * pitchRadians };
 }
 
 export function formatArea(areaMm2: number, format: "m2" | "mm2"): string {

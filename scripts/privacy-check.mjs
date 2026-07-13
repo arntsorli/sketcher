@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,7 @@ const checks = [
 
 const files = execFileSync("git", ["ls-files"], { cwd: root, encoding: "utf8" })
   .split(/\r?\n/)
-  .filter((file) => file && !ignoredFiles.has(file));
+  .filter((file) => file && !ignoredFiles.has(file) && existsSync(path.join(root, file)));
 const findings = [];
 
 for (const file of files) {

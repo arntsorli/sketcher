@@ -16,7 +16,7 @@ Download the Windows installer or portable x64 build from the [latest GitHub rel
 - Parametric floors, explicit Outer Wall and Inner Wall drawing tools, real door/window/carport voids, straight stairs, and one automatic pitched roof with smaller merged roofs over orthogonal extensions.
 - Shared building definitions, reusable building instances, Make Unique, procedural site objects, GLB/glTF import, and GLB export.
 - Norwegian place search, polygon/visible-area capture from matching satellite or topographic previews, resilient cached flat map surfaces up to 4096 pixels, and local GeoTIFF terrain import.
-- Global settings and encrypted optional provider credentials.
+- Global settings for project defaults and display preferences.
 
 ## Development
 

@@ -30,7 +30,7 @@ The bundled object library is procedurally generated and redistributable. Import
 
 The terrain overlay searches Norwegian places, previews matching Esri satellite or topographic imagery, and selects up to a 2×2 km visible rectangle or polygon. The extraction preserves aspect ratio, supports up to a 4096-pixel maximum dimension and targets up to 8 pixels per metre, then clips the cached image to the chosen polygon on a flat Z=0 surface. Satellite capture uses high-quality JPEG with smaller-pixel retry attempts for transient provider errors; topo remains lossless PNG. The selected source, WGS84 bounds, attribution, image, and local dimensions are embedded for offline reopening.
 
-Local GeoTIFF import supports higher-resolution LiDAR-derived DTM data. High-resolution Norge i bilder orthophoto remains credential-dependent; credentials are encrypted by Windows and never stored in projects.
+Local GeoTIFF import supports higher-resolution LiDAR-derived DTM data. Credential-backed orthophoto providers are not part of the current app.
 
 ## Boundaries
 

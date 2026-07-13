@@ -43,9 +43,8 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
   const copySelection = useEditorStore((state) => state.copySelection);
   const pasteClipboard = useEditorStore((state) => state.pasteClipboard);
   const finishFoundation = useEditorStore((state) => state.finishFoundation);
-  const removeLastFoundationPoint = useEditorStore((state) => state.removeLastFoundationPoint);
+  const removeLastDraftPoint = useEditorStore((state) => state.removeLastDraftPoint);
   const finishPolygonFace = useEditorStore((state) => state.finishPolygonFace);
-  const removeLastPolygonPoint = useEditorStore((state) => state.removeLastPolygonPoint);
   const addRoof = useEditorStore((state) => state.addRoof);
   const [addOpen, setAddOpen] = useState(false);
   const [clipOpen, setClipOpen] = useState(false);
@@ -197,7 +196,7 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
                 disabled: draft.points.length < 3,
               })}
             {tool === "polygon" &&
-              action("Undo point", "↶", removeLastPolygonPoint, {
+              action("Undo point", "↶", removeLastDraftPoint, {
                 disabled: draft.points.length === 0,
               })}
             {action("New building", "+B", startNewBuilding)}
@@ -232,7 +231,7 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
                 disabled: draft.points.length < 3,
               })}
             {!activeBuilding &&
-              action("Undo last point", "↶", removeLastFoundationPoint, {
+              action("Undo last point", "↶", removeLastDraftPoint, {
                 disabled: draft.points.length === 0,
               })}
             {activeBuilding && (
@@ -303,9 +302,8 @@ export function EditorShell({ onSettings }: Props) {
   const placeAsset = useEditorStore((state) => state.placeAsset);
   const importAsset = useEditorStore((state) => state.importAsset);
   const finishFoundation = useEditorStore((state) => state.finishFoundation);
-  const removeLastFoundationPoint = useEditorStore((state) => state.removeLastFoundationPoint);
+  const removeLastDraftPoint = useEditorStore((state) => state.removeLastDraftPoint);
   const finishPolygonFace = useEditorStore((state) => state.finishPolygonFace);
-  const removeLastPolygonPoint = useEditorStore((state) => state.removeLastPolygonPoint);
   const addRoof = useEditorStore((state) => state.addRoof);
   const save = useEditorStore((state) => state.save);
   const closeProject = useEditorStore((state) => state.closeProject);
@@ -461,7 +459,7 @@ export function EditorShell({ onSettings }: Props) {
                   <button
                     className="button secondary wide small"
                     disabled={draft.points.length === 0}
-                    onClick={removeLastFoundationPoint}
+                    onClick={removeLastDraftPoint}
                   >
                     Undo last point
                   </button>
@@ -516,7 +514,7 @@ export function EditorShell({ onSettings }: Props) {
                   <button
                     className="button secondary wide small"
                     disabled={draft.points.length === 0}
-                    onClick={removeLastPolygonPoint}
+                    onClick={removeLastDraftPoint}
                   >
                     Undo last point
                   </button>

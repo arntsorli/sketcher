@@ -16,11 +16,11 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-008 | Foundation drawing and dimensions | Done for v0.1.4 | SK-007 | Unit, smoke, and direct-input persistence E2E |
 | SK-009 | Floors and wall modelling | In progress | SK-008 | Snap/alignment and dependency tests |
 | SK-010 | Openings, stairs, and automatic pitched roof | In progress | SK-009 | Geometry golden tests |
-| SK-011 | Geometry worker and Manifold integration | In progress | SK-010 | All-solid coverage, cancellation, golden tests |
+| SK-011 | Solid geometry worker | Deferred | SK-010 | Add only after profiling proves it necessary |
 | SK-012 | Building library and shared instances | In progress | SK-009 | Shared/unique propagation automation |
 | SK-013 | Scene objects and GLB interchange | In progress | SK-007 | Textured GLB round-trip fixtures |
-| SK-014 | Terrain provider framework and online Norway terrain | In progress | SK-007 | Live provider and cached offline-reopen smoke |
-| SK-015 | GeoTIFF and optional orthophoto providers | In progress | SK-014 | GeoTIFF fixture and credential-path tests |
+| SK-014 | Public Norway map imagery | Done for v0.1.4 | SK-007 | Live provider and cached offline-reopen smoke |
+| SK-015 | GeoTIFF terrain | In progress | SK-014 | GeoTIFF fixture tests |
 | SK-016 | Accessibility, performance, and failure hardening | In progress | SK-004–SK-015 | E2E, profiling, corrupt input suite |
 | SK-017 | Documentation and operator guidance | In progress | All feature tickets | Workflow illustrations and user guide |
 | SK-018 | Windows CI, packaging, and release automation | Done for tagged releases | SK-016 | Green public Actions and release runs |
@@ -145,8 +145,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Serializable snapshot command history with 100-step undo/redo.
 - Dirty tracking, manual save, recovery scheduling, mode/tool/selection state, and keyboard shortcuts.
-- Global project path, autosave, area, grid, snap, theme, graphics, canvas background colour, navigation, cache, provider token, version, and license UI.
-- Secrets use Electron `safeStorage` and remain outside projects.
+- Global project path, autosave, area, grid, snap, theme, canvas background colour, version, and license UI.
 
 **Todo**
 
@@ -225,24 +224,20 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **Todo / hardening**
 
 - Improve valley/eave topology for deeply nested concave plans and non-orthogonal protrusions; irregular footprints currently receive a stable single longest-direction roof fallback.
-- Move roof generation into the Manifold geometry worker and add watertight volume goldens.
+- Add watertight volume goldens if solid-model export becomes a product requirement.
 - Add one-click dependency confirmation when deleting floors, stairs, or openings.
 
-### SK-011 — Geometry worker and Manifold integration
+### SK-011 — Solid geometry worker (deferred)
 
-**Outcome:** Expensive solid generation is cancellable, watertight, and never blocks the UI.
+**Decision**
 
-**Implemented**
+- Current walls and openings render directly from small box pieces, including mitered corners. This is fast enough for the current property-scale workflow and avoids a second asynchronous geometry path.
+- The previous generic worker protocol and Manifold/WASM replacement pass were removed because they duplicated already-visible geometry without enabling a user-facing operation.
 
-- Module worker initialization for `manifold-3d`, progress reporting, request cancellation, and explicit WASM object deletion.
-- Indexed wall solids with real opening subtraction, bounds metadata, and renderer-side replacement.
-- Deterministic segmented-wall fallback when WASM or a request fails.
-- Development and packaged-runtime smoke checks verify worker readiness and generated wall geometry.
+**Activation criteria**
 
-**Todo**
-
-- Convert slabs, stair voids, and roofs to Manifold worker requests.
-- Add golden bounds, volume, watertightness, cancellation, and memory-release tests.
+- Add a worker only after profiling shows UI stalls or a required Boolean solid operation cannot be expressed by the direct geometry path.
+- Scope any future worker to that demonstrated operation rather than introducing a generic request framework up front.
 
 ### SK-012 — Building library and shared instances
 
@@ -274,40 +269,35 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Built-in asset buttons now enter a translucent grid-snapped pointer preview and click-to-place flow; add asset rename/delete and GLB placement preview.
 - Test GLB round-trip with compressed and textured fixtures.
 
-### SK-014 — Terrain provider framework and online Norway terrain
+### SK-014 — Public Norway map imagery
 
-**Outcome:** Norwegian public map/elevation data becomes an offline-capable scene layer.
+**Outcome:** Norwegian public map imagery becomes an offline-capable flat scene layer.
 
 **Implemented**
 
-- Place search, coordinate entry, map click, AOI overlay, 250 m–2 km sizes, detail selection, estimated model data, and attribution.
-- Kartverket WMTS capabilities discovery with public Topo fallback.
-- Høydedata batch sampling up to 65×65 points, local centre normalization, map texture capture, embedded cache, and terrain mesh generation.
-- Live smoke verification against Kartverket/Høydedata produced a normalized, map-textured terrain layer and retained it in the project archive model.
+- Norwegian place search and Leaflet previews for satellite and topographic imagery.
+- Visible-frame or polygon selection up to 2×2 km, adaptive image capture, attribution, and an embedded flat map surface.
+- Live smoke coverage for search, selection, capture, and cached scene placement.
 
 **Todo / hardening**
 
-- Add request progress, cancellation, retry, per-provider timeout, and offline cached-service messaging.
+- Add clearer request progress, cancellation, and offline provider messaging.
 - Reopen a cached terrain project with networking disabled; current smoke validates acquisition and archive embedding, not the offline restart path.
-- Chunk and LOD terrain rather than a single mesh; enforce resident triangle/cache budgets.
-- Use reprojection metadata and UTM local anchor rather than an EPSG:4258-only sampled grid.
-- Add provider contract tests with recorded fixtures so CI does not depend on live services.
+- Add an online elevation source only when a concrete workflow needs it; local GeoTIFF covers the current elevation workflow.
 
-### SK-015 — GeoTIFF and optional orthophoto providers
+### SK-015 — GeoTIFF terrain
 
-**Outcome:** Detailed local elevation and credentialed imagery extend the public defaults.
+**Outcome:** Detailed local elevation extends the flat public map imagery.
 
 **Implemented**
 
 - Local GeoTIFF picker, downsampled first-band decoding, no-data handling, EPSG extraction, EUREF89/UTM transforms for zones 32/33/35, georeferenced bounds, centre normalization, embedded source, and offline render.
-- Encrypted optional Norge i bilder token setting.
 
 **Todo**
 
 - Expand GeoTIFF support beyond the first elevation band and supported EUREF89/UTM/geographic CRS set.
-- Move GeoTIFF decoding/mesh generation to a cancellable worker.
-- Implement authenticated Norge i bilder capabilities/token-expiry flow and imagery selection.
-- Add configurable HTTPS XYZ/WMS provider with attribution and credentials.
+- Profile larger GeoTIFF imports before deciding whether decoding needs a worker.
+- Evaluate authenticated orthophoto only when a supported provider and concrete import workflow are selected; do not add credential infrastructure in advance.
 - Add GeoTIFF fixtures for projected DTM, geographic imagery, no-data, and large raster downsampling.
 
 ### SK-016 — Accessibility, performance, and failure hardening
@@ -337,7 +327,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **Todo**
 
 - Add illustrated capture-style guides for project entry, direct input, walls/openings, shared instances, GLB exchange, terrain sources, and scale verification.
-- Document controls, shortcuts, `.sketcher` recovery, provider credentials, attribution, and offline behaviour.
+- Document controls, shortcuts, `.sketcher` recovery, attribution, and offline behaviour.
 - Document concept-design limitations prominently in app, README, and release notes.
 
 ### SK-018 — Windows CI, packaging, and release automation
@@ -458,7 +448,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Cache the image through the narrow Electron IPC allow-list, add it as a clipped Z=0 scene surface with source bounds and attribution, select it, and frame it automatically after import.
 - Unit coverage verifies bounds selection, metre/area calculation, aspect-correct extraction, persisted polygon data, UV mapping, and clipped render geometry. The live Electron smoke searches, validates visible-bounds capture, draws and finishes a polygon, imports it, and confirms the scene layer.
 - Satellite extraction uses high-quality JPEG rather than multi-megabyte PNG. Transient HTTP 5xx, 408, and 429 responses retry the same selected extent at 4096, 3072, then 2048 maximum pixels; topographic extraction remains lossless PNG.
-- Remaining: offline-restart E2E, editable polygon drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and credential-backed orthophoto remain follow-on work rather than prerequisites.
+- Remaining: offline-restart E2E, editable polygon drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, and LiDAR-derived terrain remain follow-on work rather than prerequisites.
 
 ### SK-026 — Expanded site-object library
 
@@ -496,8 +486,8 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **Todo**
 
 - Outer-wall pairs with one shared endpoint now derive matching inside/outside miter cuts from their actual directions and thicknesses, including non-orthogonal corners.
-- Mitered walls use an extruded fallback profile so the visible join is clean while standard unjoined walls retain the Manifold path.
-- T-junctions, multiple walls at one endpoint, inner-wall joins, and Manifold/export parity remain to be implemented.
+- Mitered and standard walls use the same direct box/profile geometry path.
+- T-junctions, multiple walls at one endpoint, and inner-wall joins remain to be implemented.
 - Preserve manual wall alignment/type overrides and provide a validation message for degenerate or unresolved junctions.
 - Geometry tests cover 90° and angled exterior corners; add golden bounds/volume tests for acute, obtuse, T, and mixed-thickness cases.
 
@@ -559,7 +549,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Wall creation resets to the orthogonal X/Y construction axes whenever the Wall tool is selected. Only Ctrl+wheel changes the construction-axis offset in the configured 5 degree increments; normal scrolling remains camera navigation.
 - Satellite/map captures now use the provider's supported 4096 pixel maximum dimension and target up to 8 pixels per metre. The selection summary reports the exact capture dimensions before download. Source imagery resolution still limits real ground detail, and licensed Norwegian orthophoto remains a separate provider ticket.
 - Unit coverage verifies repeated undoable clipboard pastes, clipping-plane placement/direction, orthogonal and offset construction axes, and adaptive high-resolution captures. The desktop smoke exercises the toolbar, Ctrl+wheel angle adjustment, Ctrl+C/Ctrl+V, and clipping enable/reset.
-- Remaining: persist optional clipping presets in project/session preferences, add keyboard discovery/help, and evaluate credential-backed Norge i bilder orthophoto without storing secrets in project archives.
+- Remaining: persist optional clipping presets in project/session preferences and add keyboard discovery/help.
 
 ### SK-035 - Reliable high-resolution satellite capture
 
@@ -630,7 +620,7 @@ The following evidence is refreshed before each publication. Any failed command 
 |---|---|
 | Formatting, lint, typecheck, unit tests, renderer/main build | `npm run ci` passes |
 | Dependency security | `npm audit --audit-level=high` reports zero vulnerabilities |
-| Desktop runtime | Home, editor, Builder direct input/wall angle, viewport tools, object copy/paste, clipping, sandbox boundary, and Manifold worker smoke pass |
+| Desktop runtime | Home, editor, Builder direct input/wall angle, wall openings, viewport tools, object copy/paste, clipping, and sandbox boundary smoke pass |
 | Terrain runtime | Live search, satellite preview, polygon selection, 4096-pixel adaptive capture, and cached Z=0 map-surface smoke pass |
 | Windows distributions | NSIS setup, portable x64, and unpacked app build successfully; unpacked app smoke passes |
 | Public delivery | Each green code push moves the rolling `latest` release and replaces its NSIS, portable x64, and SHA-256 assets; `v0.1.4` remains the historical tagged release |

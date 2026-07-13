@@ -115,18 +115,15 @@ interface EditorState {
   setClipping(update: Partial<ClippingState>): void;
   setSelection(selection: Selection): void;
   setStatus(status: string): void;
-  setError(error?: string): void;
   setDraft(update: Partial<DraftState>): void;
   commit(label: string, mutate: (project: ProjectDocument) => void): void;
   undo(): void;
   redo(): void;
   copySelection(): void;
   pasteClipboard(): void;
-  addFoundationPoint(point: Vec2): void;
-  removeLastFoundationPoint(): void;
+  addDraftPoint(point: Vec2): void;
+  removeLastDraftPoint(): void;
   finishFoundation(): void;
-  addPolygonPoint(point: Vec2): void;
-  removeLastPolygonPoint(): void;
   finishPolygonFace(): void;
   extrudeSelectedPolygon(heightMm: number): void;
   addWallSegment(start: Vec2, end: Vec2): void;
@@ -372,9 +369,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setStatus(status) {
     set({ status });
   },
-  setError(error) {
-    set({ error });
-  },
   setDraft(update) {
     set((state) => ({ draft: { ...state.draft, ...update } }));
   },
@@ -480,16 +474,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  addFoundationPoint(point) {
+  addDraftPoint(point) {
     const state = get();
+    if (state.tool !== "foundation" && state.tool !== "polygon") return;
+    const foundation = state.tool === "foundation";
     const first = state.draft.points[0];
     if (first && state.draft.points.length >= 3 && distance(first, point) < 1) {
-      get().finishFoundation();
+      if (foundation) get().finishFoundation();
+      else get().finishPolygonFace();
       return;
     }
     const error = validateNextPolygonPoint(state.draft.points, point);
     if (error) {
-      set({ error, status: "Foundation point rejected" });
+      set({ error, status: `${foundation ? "Foundation" : "Polygon"} point rejected` });
       return;
     }
     set({
@@ -502,7 +499,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  removeLastFoundationPoint() {
+  removeLastDraftPoint() {
     const state = get();
     if (state.draft.points.length === 0) return;
     set({
@@ -512,7 +509,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         hover: undefined,
         numericInput: "",
       },
-      status: "Last foundation point removed",
+      status: `Last ${state.tool === "foundation" ? "foundation" : "polygon"} point removed`,
       error: undefined,
     });
   },
@@ -534,43 +531,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       activeFloorId: building.floors[0]?.id,
       tool: "external-wall",
       draft: { points: [], axisAngle: state.draft.axisAngle, numericInput: "" },
-    });
-  },
-
-  addPolygonPoint(point) {
-    const state = get();
-    const first = state.draft.points[0];
-    if (first && state.draft.points.length >= 3 && distance(first, point) < 1) {
-      get().finishPolygonFace();
-      return;
-    }
-    const error = validateNextPolygonPoint(state.draft.points, point);
-    if (error) {
-      set({ error, status: "Polygon point rejected" });
-      return;
-    }
-    set({
-      draft: {
-        ...state.draft,
-        points: [...state.draft.points, point],
-        hover: undefined,
-        numericInput: "",
-      },
-    });
-  },
-
-  removeLastPolygonPoint() {
-    const state = get();
-    if (state.draft.points.length === 0) return;
-    set({
-      draft: {
-        ...state.draft,
-        points: state.draft.points.slice(0, -1),
-        hover: undefined,
-        numericInput: "",
-      },
-      status: "Last polygon point removed",
-      error: undefined,
     });
   },
 

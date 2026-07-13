@@ -8,8 +8,6 @@ import type { GlobalSettings } from "../shared/model";
 import {
   clearRecovery,
   createProjectFile,
-  deleteSecret,
-  getSecret,
   getSettings,
   importedAsset,
   listProjects,
@@ -17,7 +15,6 @@ import {
   restoreRecovery,
   saveProjectFile,
   saveRecovery,
-  setSecret,
   updateSettings,
 } from "./persistence";
 
@@ -213,65 +210,6 @@ function registerIpc(): void {
     }),
   );
   ipcMain.handle(
-    "terrain:sampleElevation",
-    trustedHandler(
-      async (
-        latitude: number,
-        longitude: number,
-        widthMeters: number,
-        heightMeters: number,
-        resolution: number,
-      ) => {
-        if (
-          !Number.isFinite(latitude) ||
-          !Number.isFinite(longitude) ||
-          widthMeters <= 0 ||
-          heightMeters <= 0 ||
-          widthMeters > 2000 ||
-          heightMeters > 2000 ||
-          !Number.isInteger(resolution) ||
-          resolution < 2 ||
-          resolution > 65
-        ) {
-          throw new Error("Invalid elevation-grid request.");
-        }
-        const points: [number, number][] = [];
-        const latitudeStep = heightMeters / 111_320 / (resolution - 1);
-        const longitudeStep =
-          widthMeters / (111_320 * Math.cos((latitude * Math.PI) / 180)) / (resolution - 1);
-        for (let row = 0; row < resolution; row += 1) {
-          for (let column = 0; column < resolution; column += 1) {
-            points.push([
-              longitude + (column - (resolution - 1) / 2) * longitudeStep,
-              latitude - (row - (resolution - 1) / 2) * latitudeStep,
-            ]);
-          }
-        }
-        const elevationsMeters: number[] = [];
-        let dataSource = "Kartverket Høydedata";
-        for (let offset = 0; offset < points.length; offset += 50) {
-          const batch = points.slice(offset, offset + 50);
-          const url = new URL("https://ws.geonorge.no/hoydedata/v1/punkt");
-          url.searchParams.set("koordsys", "4258");
-          url.searchParams.set("punkter", JSON.stringify(batch));
-          const response = await net.fetch(url.toString());
-          if (!response.ok) throw new Error(`Elevation request failed (${response.status}).`);
-          const payload = (await response.json()) as {
-            punkter?: Array<{ z?: number; datakilde?: string }>;
-          };
-          const returned = payload.punkter ?? [];
-          for (let index = 0; index < batch.length; index += 1) {
-            const point = returned[index];
-            elevationsMeters.push(Number.isFinite(point?.z) ? Number(point?.z) : 0);
-            if (point?.datakilde) dataSource = `Kartverket ${point.datakilde.toUpperCase()}`;
-          }
-        }
-        return { columns: resolution, rows: resolution, elevationsMeters, dataSource };
-      },
-    ),
-  );
-
-  ipcMain.handle(
     "terrain:fetchImage",
     trustedHandler(async (url: string) => {
       const parsed = new URL(url);
@@ -311,18 +249,6 @@ function registerIpc(): void {
     }),
   );
 
-  ipcMain.handle(
-    "secrets:get",
-    trustedHandler((key: string) => getSecret(key)),
-  );
-  ipcMain.handle(
-    "secrets:set",
-    trustedHandler((key: string, value: string) => setSecret(key, value)),
-  );
-  ipcMain.handle(
-    "secrets:delete",
-    trustedHandler((key: string) => deleteSecret(key)),
-  );
   ipcMain.handle(
     "app:version",
     trustedHandler(() => packageMetadata.version),

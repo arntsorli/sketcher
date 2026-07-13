@@ -7,7 +7,6 @@ import type {
   TerrainLayer,
   Wall,
 } from "../../../shared/model";
-import type { WallSolidRequest } from "../workers/geometryTypes";
 
 const MM_TO_M = 0.001;
 const JOIN_TOLERANCE_MM = 1;
@@ -295,25 +294,9 @@ function wallWithOpenings(
   const wallGroup = new THREE.Group();
   wallGroup.position.set(wall.start.x * MM_TO_M, wall.start.y * MM_TO_M, floorElevation * MM_TO_M);
   wallGroup.rotation.z = Math.atan2(wall.end.y - wall.start.y, wall.end.x - wall.start.x);
-  const manifoldRequest: WallSolidRequest = {
-    length,
-    thickness: wall.thickness,
-    height: floorHeight,
-    alignment: wall.alignment,
-    insideSign,
-    openings: sorted.map((opening) => ({
-      offset: opening.offset,
-      width: opening.width,
-      height: opening.height,
-      sillHeight: opening.sillHeight,
-    })),
-  };
   wallGroup.userData = {
     entityType: "wall",
     entityId: wall.id,
-    wallType: wall.type,
-    ...(miter.hasMiter ? {} : { manifoldRequest }),
-    joinery: miter.hasMiter ? "miter-fallback" : undefined,
   };
   group.add(wallGroup);
   let cursor = 0;
@@ -368,7 +351,7 @@ interface RoofPoint {
   y: number;
 }
 
-export interface AutomaticRoofModule {
+interface AutomaticRoofModule {
   minU: number;
   maxU: number;
   minV: number;
@@ -377,7 +360,7 @@ export interface AutomaticRoofModule {
   primary: boolean;
 }
 
-export interface AutomaticRoofLayout {
+interface AutomaticRoofLayout {
   axisU: RoofPoint;
   axisV: RoofPoint;
   modules: AutomaticRoofModule[];

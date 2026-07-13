@@ -1,20 +1,20 @@
 import { z } from "zod";
 
-export const vec2Schema = z.object({ x: z.number().finite(), y: z.number().finite() });
-export const vec3Schema = z.object({
+const vec2Schema = z.object({ x: z.number().finite(), y: z.number().finite() });
+const vec3Schema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
   z: z.number().finite(),
 });
 
-export const buildingDefaultsSchema = z.object({
+const buildingDefaultsSchema = z.object({
   externalWallThickness: z.number().positive().default(250),
   internalWallThickness: z.number().positive().default(100),
   floorHeight: z.number().positive().default(2700),
   slabThickness: z.number().nonnegative().default(200),
 });
 
-export const floorSchema = z.object({
+const floorSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.enum(["story", "roof"]),
@@ -23,7 +23,7 @@ export const floorSchema = z.object({
   slabThickness: z.number().nonnegative(),
 });
 
-export const wallSchema = z.object({
+const wallSchema = z.object({
   id: z.string(),
   floorId: z.string(),
   start: vec2Schema,
@@ -33,7 +33,7 @@ export const wallSchema = z.object({
   alignment: z.enum(["inside", "center", "outside"]),
 });
 
-export const openingSchema = z.object({
+const openingSchema = z.object({
   id: z.string(),
   floorId: z.string(),
   wallId: z.string(),
@@ -44,7 +44,7 @@ export const openingSchema = z.object({
   sillHeight: z.number().nonnegative(),
 });
 
-export const stairSchema = z.object({
+const stairSchema = z.object({
   id: z.string(),
   floorId: z.string(),
   position: vec2Schema,
@@ -54,7 +54,7 @@ export const stairSchema = z.object({
   riserCount: z.number().int().positive(),
 });
 
-export const roofSchema = z.object({
+const roofSchema = z.object({
   floorId: z.string(),
   pitchDegrees: z.number().min(1).max(80),
   overhang: z.number().nonnegative(),
@@ -63,7 +63,7 @@ export const roofSchema = z.object({
   flipped: z.boolean(),
 });
 
-export const buildingDefinitionSchema = z.object({
+const buildingDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
   footprint: z.array(vec2Schema).min(3),
@@ -75,13 +75,13 @@ export const buildingDefinitionSchema = z.object({
   roof: roofSchema.optional(),
 });
 
-export const transformSchema = z.object({
+const transformSchema = z.object({
   position: vec3Schema,
   rotationZ: z.number(),
   scale: z.number().positive(),
 });
 
-export const buildingInstanceSchema = z.object({
+const buildingInstanceSchema = z.object({
   id: z.string(),
   definitionId: z.string(),
   name: z.string(),
@@ -89,7 +89,7 @@ export const buildingInstanceSchema = z.object({
   visible: z.boolean(),
 });
 
-export const assetDefinitionSchema = z.object({
+const assetDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
   source: z.enum(["builtin", "imported", "generated"]),
@@ -121,7 +121,7 @@ export const assetDefinitionSchema = z.object({
     .optional(),
 });
 
-export const assetInstanceSchema = z.object({
+const assetInstanceSchema = z.object({
   id: z.string(),
   definitionId: z.string(),
   name: z.string(),
@@ -129,7 +129,7 @@ export const assetInstanceSchema = z.object({
   visible: z.boolean(),
 });
 
-export const terrainLayerSchema = z.object({
+const terrainLayerSchema = z.object({
   id: z.string(),
   name: z.string(),
   provider: z.enum(["kartverket", "norge-i-bilder", "local-geotiff", "custom"]),
@@ -152,7 +152,7 @@ export const terrainLayerSchema = z.object({
   visible: z.boolean(),
 });
 
-export const projectSettingsSchema = z.object({
+const projectSettingsSchema = z.object({
   areaFormat: z.enum(["m2", "mm2"]),
   gridSpacing: z.number().positive(),
   majorGridSpacing: z.number().positive(),
@@ -160,7 +160,7 @@ export const projectSettingsSchema = z.object({
   angleIncrement: z.number().positive(),
 });
 
-export const projectDocumentSchema = z
+const projectDocumentSchema = z
   .object({
     schemaVersion: z.literal(1),
     id: z.string(),
@@ -234,15 +234,10 @@ export const globalSettingsSchema = z.object({
   gridSpacing: z.number().positive(),
   majorGridSpacing: z.number().positive(),
   snapTolerance: z.number().positive(),
-  graphicsQuality: z.enum(["low", "medium", "high"]),
   backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex colour."),
-  invertZoom: z.boolean(),
-  terrainCacheMb: z.number().int().positive(),
 });
 
 export type Vec2 = z.infer<typeof vec2Schema>;
-export type Vec3 = z.infer<typeof vec3Schema>;
-export type BuildingDefaults = z.infer<typeof buildingDefaultsSchema>;
 export type Floor = z.infer<typeof floorSchema>;
 export type Wall = z.infer<typeof wallSchema>;
 export type Opening = z.infer<typeof openingSchema>;
@@ -256,7 +251,7 @@ export type TerrainLayer = z.infer<typeof terrainLayerSchema>;
 export type ProjectDocument = z.infer<typeof projectDocumentSchema>;
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>;
 
-export const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 1;
 
 export function parseProjectDocument(value: unknown): ProjectDocument {
   if (!value || typeof value !== "object") throw new Error("Project model must be an object.");

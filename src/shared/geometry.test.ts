@@ -3,7 +3,6 @@ import {
   calculateOpeningPlacement,
   calculateStair,
   formatArea,
-  gablePanelRotation,
   lockToConstructionAxis,
   polygonAreaMm2,
   polygonPerimeterMm,
@@ -74,14 +73,6 @@ describe("building geometry", () => {
 
   it("calculates stair risers", () => {
     expect(calculateStair(2700)).toEqual({ riserCount: 15, riserHeight: 180 });
-  });
-
-  it("raises gable roof panels toward the ridge", () => {
-    const pitch = Math.PI / 6;
-    expect(gablePanelRotation(-1, true, pitch)).toEqual({ x: pitch, y: 0 });
-    expect(gablePanelRotation(1, true, pitch)).toEqual({ x: -pitch, y: 0 });
-    expect(gablePanelRotation(-1, false, pitch)).toEqual({ x: 0, y: -pitch });
-    expect(gablePanelRotation(1, false, pitch)).toEqual({ x: 0, y: pitch });
   });
 
   it("previews generous door placement and side clearances", () => {

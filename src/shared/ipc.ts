@@ -34,13 +34,6 @@ export interface PlaceSearchResult {
   longitude: number;
 }
 
-export interface ElevationGridResult {
-  columns: number;
-  rows: number;
-  elevationsMeters: number[];
-  dataSource: string;
-}
-
 export interface SketcherApi {
   projects: {
     list(): Promise<ProjectCard[]>;
@@ -65,18 +58,6 @@ export interface SketcherApi {
   terrain: {
     search(query: string): Promise<PlaceSearchResult[]>;
     fetchImage(url: string): Promise<string>;
-    sampleElevation(
-      latitude: number,
-      longitude: number,
-      widthMeters: number,
-      heightMeters: number,
-      resolution: number,
-    ): Promise<ElevationGridResult>;
-  };
-  secrets: {
-    get(key: string): Promise<string | null>;
-    set(key: string, value: string): Promise<void>;
-    delete(key: string): Promise<void>;
   };
   app: {
     version(): Promise<string>;

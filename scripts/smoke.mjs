@@ -26,9 +26,7 @@ const electronApp = await electron.launch({
 
 try {
   const window = await electronApp.firstWindow();
-  const rendererMessages = [];
   window.on("console", (message) => {
-    rendererMessages.push(message.text());
     console.log(`[renderer:${message.type()}] ${message.text()}`);
   });
   window.on("pageerror", (error) => console.error(`[renderer:error] ${error.message}`));
@@ -109,12 +107,6 @@ try {
   await window.locator('.scene-host[data-axis-angle="0"]').waitFor({ state: "visible" });
   await canvas.click({ position: { x: bounds.width * 0.44, y: bounds.height * 0.64 } });
   await canvas.click({ position: { x: bounds.width * 0.58, y: bounds.height * 0.64 } });
-  await window
-    .locator('.scene-host[data-geometry-worker="ready"]')
-    .waitFor({ state: "visible", timeout: 15_000 });
-  if (rendererMessages.some((message) => message.includes("Manifold wall generation failed"))) {
-    throw new Error("Manifold worker fell back during the smoke journey.");
-  }
   await modellingToolbar.getByRole("button", { name: "Inner wall", exact: true }).click();
   await window.locator('.scene-host[data-wall-element="inner"]').waitFor({ state: "visible" });
   await canvas.click({ position: { x: bounds.width * 0.49, y: bounds.height * 0.6 } });
@@ -234,7 +226,7 @@ try {
   );
   if (rendererHasNode) throw new Error("Node globals leaked into the renderer.");
   console.log(
-    `Smoke passed: version ${version}, secure renderer, home/editor/builder rendered, direct input and Manifold wall committed.`,
+    `Smoke passed: version ${version}, secure renderer, home/editor/builder rendered, direct input and walls committed.`,
   );
 } finally {
   await electronApp.close();

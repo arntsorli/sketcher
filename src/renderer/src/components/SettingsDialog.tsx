@@ -13,15 +13,11 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   const version = useEditorStore((state) => state.version);
   const updateSettings = useEditorStore((state) => state.updateSettings);
   const [draft, setDraft] = useState<GlobalSettings | undefined>(settings);
-  const [nibToken, setNibToken] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setDraft(settings);
-    void window.sketcher.secrets
-      .get("norge-i-bilder-token")
-      .then((token) => setNibToken(token ?? ""));
   }, [open, settings]);
 
   if (!draft) return null;
@@ -30,8 +26,6 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
 
   const save = async () => {
     await updateSettings(draft);
-    if (nibToken.trim()) await window.sketcher.secrets.set("norge-i-bilder-token", nibToken.trim());
-    else await window.sketcher.secrets.delete("norge-i-bilder-token");
     setMessage("Settings saved");
     window.setTimeout(() => onOpenChange(false), 350);
   };
@@ -123,37 +117,19 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             </section>
             <section>
               <h3>Display & navigation</h3>
-              <div className="field-row">
-                <label>
-                  Theme
-                  <select
-                    value={draft.theme}
-                    onChange={(event) =>
-                      patch("theme", event.target.value as GlobalSettings["theme"])
-                    }
-                  >
-                    <option value="dark">Dark</option>
-                    <option value="light">Light</option>
-                    <option value="system">System</option>
-                  </select>
-                </label>
-                <label>
-                  Graphics
-                  <select
-                    value={draft.graphicsQuality}
-                    onChange={(event) =>
-                      patch(
-                        "graphicsQuality",
-                        event.target.value as GlobalSettings["graphicsQuality"],
-                      )
-                    }
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </label>
-              </div>
+              <label>
+                Theme
+                <select
+                  value={draft.theme}
+                  onChange={(event) =>
+                    patch("theme", event.target.value as GlobalSettings["theme"])
+                  }
+                >
+                  <option value="dark">Dark</option>
+                  <option value="light">Light</option>
+                  <option value="system">System</option>
+                </select>
+              </label>
               <label>
                 Canvas background colour
                 <input
@@ -162,38 +138,6 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
                   onChange={(event) => patch("backgroundColor", event.target.value)}
                 />
               </label>
-              <label className="check-label">
-                <input
-                  type="checkbox"
-                  checked={draft.invertZoom}
-                  onChange={(event) => patch("invertZoom", event.target.checked)}
-                />
-                Invert zoom direction
-              </label>
-            </section>
-            <section>
-              <h3>Terrain providers</h3>
-              <label>
-                Norge i bilder access token
-                <input
-                  type="password"
-                  value={nibToken}
-                  placeholder="Optional GeoID-backed token"
-                  onChange={(event) => setNibToken(event.target.value)}
-                />
-              </label>
-              <label>
-                Terrain cache (MB)
-                <input
-                  type="number"
-                  min={128}
-                  value={draft.terrainCacheMb}
-                  onChange={(event) => patch("terrainCacheMb", Number(event.target.value))}
-                />
-              </label>
-              <p className="supporting-text">
-                Provider secrets are encrypted by Windows and never written to project files.
-              </p>
             </section>
           </div>
           <div className="dialog-footer">

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { app, safeStorage } from "electron";
+import { app } from "electron";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import type { ImportedAsset, OpenProjectResult, ProjectArchive, ProjectCard } from "../shared/ipc";
 import {
@@ -27,10 +27,6 @@ function recentPath(): string {
   return path.join(app.getPath("userData"), "recent.json");
 }
 
-function secretsPath(): string {
-  return path.join(app.getPath("userData"), "secrets.json");
-}
-
 export function defaultSettings(): GlobalSettings {
   return {
     projectLibraryPath: path.join(app.getPath("documents"), "Sketcher Projects"),
@@ -40,10 +36,7 @@ export function defaultSettings(): GlobalSettings {
     gridSpacing: 100,
     majorGridSpacing: 1000,
     snapTolerance: 12,
-    graphicsQuality: "high",
     backgroundColor: "#dfe7ee",
-    invertZoom: false,
-    terrainCacheMb: 1024,
   };
 }
 
@@ -282,36 +275,4 @@ export function importedAsset(fileName: string, data: Buffer): ImportedAsset {
     dataBase64: data.toString("base64"),
     contentHash: createHash("sha256").update(data).digest("hex"),
   };
-}
-
-async function readSecrets(): Promise<Record<string, string>> {
-  try {
-    return JSON.parse(await readFile(secretsPath(), "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-export async function getSecret(key: string): Promise<string | null> {
-  if (!safeStorage.isEncryptionAvailable()) return null;
-  const secrets = await readSecrets();
-  const encrypted = secrets[key];
-  if (!encrypted) return null;
-  return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
-}
-
-export async function setSecret(key: string, value: string): Promise<void> {
-  if (!safeStorage.isEncryptionAvailable())
-    throw new Error("Secure credential storage is unavailable.");
-  const secrets = await readSecrets();
-  secrets[key] = safeStorage.encryptString(value).toString("base64");
-  await mkdir(path.dirname(secretsPath()), { recursive: true });
-  await writeFile(secretsPath(), JSON.stringify(secrets, null, 2), "utf8");
-}
-
-export async function deleteSecret(key: string): Promise<void> {
-  const secrets = await readSecrets();
-  delete secrets[key];
-  await mkdir(path.dirname(secretsPath()), { recursive: true });
-  await writeFile(secretsPath(), JSON.stringify(secrets, null, 2), "utf8");
 }
