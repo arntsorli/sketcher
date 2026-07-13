@@ -34,8 +34,7 @@ function BuilderInspector({
           <div>
             <strong>Draw a closed outline</strong>
             <p>
-              Click to add corners. Type a length in mm and press Enter. Shift+wheel rotates axes
-              5°.
+              Click to add corners. Type a length in mm and press Enter. Ctrl+wheel rotates axes 5°.
             </p>
           </div>
         </div>
@@ -340,7 +339,7 @@ function BuilderInspector({
           </button>
           {!building.roof ? (
             <button className="button secondary small" onClick={addRoof}>
-              + Gable roof
+              + Automatic roof
             </button>
           ) : (
             <button
@@ -362,7 +361,11 @@ function BuilderInspector({
         </div>
         {building.roof && (
           <div className="property-card">
-            <span className="eyebrow">Gable properties</span>
+            <span className="eyebrow">Automatic roof</span>
+            <p className="supporting-text">
+              The main ridge follows the building's longest direction. Extensions receive a smaller
+              merged pitched roof automatically.
+            </p>
             <div className="field-row">
               <label>
                 Pitch (°)
@@ -423,39 +426,7 @@ function BuilderInspector({
                   }
                 />
               </label>
-              <label>
-                Ridge direction
-                <select
-                  value={Math.abs(building.roof.ridgeRotationDegrees % 180) < 45 ? 0 : 90}
-                  onChange={(event) =>
-                    commit("Roof ridge rotated", (document) => {
-                      const roof = document.buildingDefinitions.find(
-                        (item) => item.id === building.id,
-                      )?.roof;
-                      if (roof) roof.ridgeRotationDegrees = Number(event.target.value);
-                    })
-                  }
-                >
-                  <option value={0}>Longest axis</option>
-                  <option value={90}>Across longest axis</option>
-                </select>
-              </label>
             </div>
-            <label className="check-label">
-              <input
-                type="checkbox"
-                checked={building.roof.flipped}
-                onChange={(event) =>
-                  commit("Roof slope flipped", (document) => {
-                    const roof = document.buildingDefinitions.find(
-                      (item) => item.id === building.id,
-                    )?.roof;
-                    if (roof) roof.flipped = event.target.checked;
-                  })
-                }
-              />
-              Flip slope metadata
-            </label>
           </div>
         )}
       </details>
@@ -585,7 +556,11 @@ function BuilderInspector({
             <label>
               Preset
               <select
-                value={`${selectedOpening.width}x${selectedOpening.height}`}
+                value={
+                  selectedOpening.kind === "carport"
+                    ? "3000x2200"
+                    : `${selectedOpening.width}x${selectedOpening.height}`
+                }
                 onChange={(event) => {
                   const [width, height] = event.target.value.split("x").map(Number);
                   commit("Opening preset changed", (document) => {
@@ -599,10 +574,7 @@ function BuilderInspector({
                 }}
               >
                 {selectedOpening.kind === "carport" ? (
-                  <>
-                    <option value="2500x2100">2500 Ã— 2100</option>
-                    <option value="3000x2200">3000 Ã— 2200</option>
-                  </>
+                  <option value="3000x2200">Default · 3000 × 2200</option>
                 ) : selectedOpening.kind === "door" ? (
                   <>
                     <option value="800x2100">800 × 2100</option>
@@ -619,6 +591,66 @@ function BuilderInspector({
                 )}
               </select>
             </label>
+            {selectedOpening.kind === "carport" && (
+              <>
+                <p className="supporting-text">
+                  Use the default vehicle opening or override its clear dimensions below.
+                </p>
+                <div className="field-row">
+                  <label>
+                    Clear width (mm)
+                    <input
+                      type="number"
+                      min={500}
+                      defaultValue={selectedOpening.width}
+                      onBlur={(event) =>
+                        commit("Carport width changed", (document) => {
+                          const targetBuilding = document.buildingDefinitions.find(
+                            (item) => item.id === building.id,
+                          );
+                          const target = targetBuilding?.openings.find(
+                            (item) => item.id === selectedOpening.id,
+                          );
+                          const wall = targetBuilding?.walls.find(
+                            (item) => item.id === selectedOpening.wallId,
+                          );
+                          if (!target || !wall) return;
+                          const wallLength = Math.hypot(
+                            wall.end.x - wall.start.x,
+                            wall.end.y - wall.start.y,
+                          );
+                          target.width = Math.min(
+                            wallLength,
+                            Math.max(500, numberOnBlur(event.target.value, target.width)),
+                          );
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Clear height (mm)
+                    <input
+                      type="number"
+                      min={500}
+                      max={floor?.height}
+                      defaultValue={selectedOpening.height}
+                      onBlur={(event) =>
+                        commit("Carport height changed", (document) => {
+                          const target = document.buildingDefinitions
+                            .find((item) => item.id === building.id)
+                            ?.openings.find((item) => item.id === selectedOpening.id);
+                          if (!target) return;
+                          target.height = Math.min(
+                            floor?.height ?? Number.POSITIVE_INFINITY,
+                            Math.max(500, numberOnBlur(event.target.value, target.height)),
+                          );
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </>
+            )}
             <div className="field-row">
               <label>
                 Offset (mm)

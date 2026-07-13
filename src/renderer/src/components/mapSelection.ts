@@ -103,7 +103,8 @@ export function staticMapImageUrl(
   url.searchParams.set("bboxSR", "4326");
   url.searchParams.set("imageSR", "4326");
   url.searchParams.set("size", `${size.width},${size.height}`);
-  url.searchParams.set("format", "png32");
+  url.searchParams.set("format", mode === "satellite" ? "jpg" : "png32");
+  if (mode === "satellite") url.searchParams.set("compressionQuality", "92");
   url.searchParams.set("transparent", "false");
   url.searchParams.set("f", "image");
   return url.toString();

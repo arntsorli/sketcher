@@ -114,63 +114,25 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
       {clipOpen && (
         <div className="viewport-tool-popover clipping-popover">
           <div className="viewport-popover-heading">
-            <div>
-              <strong>Clipping plane</strong>
-              <span>Inspect the scene without changing model geometry.</span>
-            </div>
+            <strong>Section plane</strong>
             <button onClick={() => setClipOpen(false)} aria-label="Close clipping controls">
               ×
             </button>
           </div>
-          <label className="clipping-toggle">
-            <input
-              type="checkbox"
-              checked={clipping.enabled}
-              onChange={(event) => setClipping({ enabled: event.target.checked })}
-            />
-            Enable clipping
-          </label>
-          <fieldset className="clipping-axis-switch">
-            <legend>Plane normal</legend>
-            {(["x", "y", "z"] as const).map((axis) => (
-              <button
-                type="button"
-                className={clipping.axis === axis ? "active" : ""}
-                key={axis}
-                onClick={() => setClipping({ axis, enabled: true })}
-              >
-                {axis.toUpperCase()}
-              </button>
-            ))}
-          </fieldset>
-          <label>
-            Position (mm)
-            <input
-              type="range"
-              min={-100000}
-              max={100000}
-              step={100}
-              value={Math.max(-100000, Math.min(100000, clipping.offsetMm))}
-              onChange={(event) =>
-                setClipping({ offsetMm: Number(event.target.value), enabled: true })
-              }
-            />
-          </label>
-          <input
-            aria-label="Clipping plane position in millimetres"
-            type="number"
-            step={100}
-            value={clipping.offsetMm}
-            onChange={(event) =>
-              setClipping({ offsetMm: Number(event.target.value) || 0, enabled: true })
-            }
-          />
-          <div className="clipping-actions">
+          <div className="clipping-primary-row">
+            <label className="clipping-toggle">
+              <input
+                type="checkbox"
+                checked={clipping.enabled}
+                onChange={(event) => setClipping({ enabled: event.target.checked })}
+              />
+              Enabled
+            </label>
             <button
-              className="button secondary small"
+              className="button ghost small"
               onClick={() => setClipping({ inverted: !clipping.inverted, enabled: true })}
             >
-              Flip direction
+              Flip
             </button>
             <button
               className="button ghost small"
@@ -187,14 +149,22 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
               Reset
             </button>
           </div>
-          <label className="clipping-toggle">
-            <input
-              type="checkbox"
-              checked={clipping.showHelper}
-              onChange={(event) => setClipping({ showHelper: event.target.checked })}
-            />
-            Show clipping plane
-          </label>
+          <fieldset className="clipping-axis-switch">
+            <legend>Handle axis</legend>
+            {(["x", "y", "z"] as const).map((axis) => (
+              <button
+                type="button"
+                className={clipping.axis === axis ? "active" : ""}
+                key={axis}
+                onClick={() => setClipping({ axis, enabled: true })}
+              >
+                {axis.toUpperCase()}
+              </button>
+            ))}
+          </fieldset>
+          <div className="clipping-readout">
+            {clipping.axis.toUpperCase()} · {clipping.offsetMm} mm · drag the in-scene handle
+          </div>
         </div>
       )}
 
@@ -277,7 +247,7 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
                   active: tool === "carport",
                 })}
                 {action("Stair", "T", () => setTool("stair"), { active: tool === "stair" })}
-                {action("Gable roof", "R", addRoof, {
+                {action("Add roof", "R", addRoof, {
                   disabled: Boolean(activeBuilding.roof),
                 })}
                 {tool === "wall" && (
@@ -506,8 +476,8 @@ export function EditorShell({ onSettings }: Props) {
                   >
                     <span>R</span>
                     <div>
-                      <strong>Gable roof</strong>
-                      <small>Final floor</small>
+                      <strong>Automatic roof</strong>
+                      <small>30° pitched roof</small>
                     </div>
                   </button>
                 </>

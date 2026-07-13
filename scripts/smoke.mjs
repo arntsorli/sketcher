@@ -81,10 +81,12 @@ try {
   await window.getByRole("button", { name: "Undo last point" }).click();
   await window.getByText("0 points").waitFor({ state: "visible" });
   const points = [
-    [0.42, 0.62],
-    [0.6, 0.62],
-    [0.6, 0.47],
-    [0.42, 0.47],
+    [0.4, 0.65],
+    [0.62, 0.65],
+    [0.62, 0.55],
+    [0.5, 0.55],
+    [0.5, 0.42],
+    [0.4, 0.42],
   ];
   for (const [x, y] of points) {
     await canvas.click({ position: { x: bounds.width * x, y: bounds.height * y } });
@@ -97,12 +99,14 @@ try {
   await window.mouse.wheel(0, 100);
   await window.keyboard.up("Control");
   await window.locator('.scene-host[data-axis-angle="5"]').waitFor({ state: "visible" });
+  await window.getByText("Axis offset · 5°").waitFor({ state: "visible" });
+  await window.screenshot({ path: path.join(artifacts, "wall-angle-offset.png") });
   await window.keyboard.down("Control");
   await window.mouse.wheel(0, -100);
   await window.keyboard.up("Control");
   await window.locator('.scene-host[data-axis-angle="0"]').waitFor({ state: "visible" });
-  await canvas.click({ position: { x: bounds.width * 0.46, y: bounds.height * 0.57 } });
-  await canvas.click({ position: { x: bounds.width * 0.56, y: bounds.height * 0.57 } });
+  await canvas.click({ position: { x: bounds.width * 0.44, y: bounds.height * 0.64 } });
+  await canvas.click({ position: { x: bounds.width * 0.58, y: bounds.height * 0.64 } });
   await window
     .locator('.scene-host[data-geometry-worker="ready"]')
     .waitFor({ state: "visible", timeout: 15_000 });
@@ -110,22 +114,29 @@ try {
     throw new Error("Manifold worker fell back during the smoke journey.");
   }
   await window.getByRole("button", { name: /Door/ }).click();
-  await window.mouse.move(bounds.x + bounds.width * 0.51, bounds.y + bounds.height * 0.57);
+  await window.mouse.move(bounds.x + bounds.width * 0.51, bounds.y + bounds.height * 0.64);
   await window
     .locator('.scene-host[data-opening-preview="valid"]')
     .waitFor({ state: "visible", timeout: 10_000 });
   await window.getByText(/^Door 900 mm$/).waitFor({ state: "visible" });
   await window.getByText(/^L \d+ mm$/).waitFor({ state: "visible" });
-  await canvas.click({ position: { x: bounds.width * 0.51, y: bounds.height * 0.57 } });
+  await canvas.click({ position: { x: bounds.width * 0.51, y: bounds.height * 0.64 } });
   await window
     .locator('.scene-host[data-opening-preview="invalid"]')
     .waitFor({ state: "visible", timeout: 10_000 });
   await window.getByText(/^R \d+ mm$/).waitFor({ state: "visible" });
-  await window.getByRole("button", { name: "Gable roof", exact: true }).click();
-  await window.getByText("Gable properties").waitFor({ state: "visible" });
+  await window.getByRole("button", { name: "Add roof", exact: true }).click();
+  await window.getByText("Automatic roof", { exact: true }).last().waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "gable-roof.png") });
 
   await window.getByRole("button", { name: "Architecture" }).click();
+  await window.getByRole("button", { name: "Building 1" }).first().click();
+  await canvas.click({ position: { x: bounds.width * 0.34, y: bounds.height * 0.55 } });
+  await window.getByText("1 buildings · 0 objects").waitFor({ state: "visible" });
+  await window.keyboard.press("f");
+  await window.waitForTimeout(250);
+  await canvas.click({ position: { x: bounds.width * 0.82, y: bounds.height * 0.25 } });
+  await window.screenshot({ path: path.join(artifacts, "automatic-roof-perspective.png") });
   await window.getByRole("button", { name: "Polygon face" }).click();
   for (const [x, y] of [
     [0.44, 0.64],
@@ -147,9 +158,13 @@ try {
   await window.keyboard.press("Control+v");
   await window.getByText("Cube copy", { exact: true }).last().waitFor({ state: "visible" });
   await window.getByRole("button", { name: "Clipping plane" }).click();
-  await window.getByLabel("Enable clipping").check();
+  await window.getByLabel("Enabled").check();
   await window.locator('.scene-host[data-clipping-enabled="true"]').waitFor({ state: "visible" });
-  await window.getByLabel("Clipping plane position in millimetres").fill("1000");
+  await window.getByRole("button", { name: "Y", exact: true }).click();
+  await window
+    .locator('.scene-host[data-clipping-enabled="true"][data-clipping-axis="y"]')
+    .waitFor({ state: "visible" });
+  await window.getByText(/drag the in-scene handle/).waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "clipping-plane.png") });
   await window.getByRole("button", { name: "Reset" }).click();
   await window.locator('.scene-host[data-clipping-enabled="false"]').waitFor({ state: "visible" });

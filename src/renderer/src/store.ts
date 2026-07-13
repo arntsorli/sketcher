@@ -724,7 +724,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ? finalStory.elevation + finalStory.slabThickness + finalStory.height
       : 0;
     const floorId = crypto.randomUUID();
-    get().commit("Gable roof added", (project) => {
+    get().commit("Automatic pitched roof added", (project) => {
       const target = project.buildingDefinitions.find((item) => item.id === building.id);
       if (!target) return;
       target.floors.push({

@@ -29,10 +29,10 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-021 | Top-down Builder and assisted opening placement | Done for v0.1.3 | SK-008–SK-010 | Top-view, snapping, preview, clearance, and finalized-dimension smoke |
 | SK-022 | Foundation robustness and E2E automation | In progress | SK-003, SK-008, SK-016 | Direct-input save/reopen E2E plus broader workflow coverage |
 | SK-023 | Foundation legibility and grid snap | In progress | SK-008 | Visual and direct-input grid-snap smoke |
-| SK-024 | Envelope alignment and roof closure | In progress | SK-009, SK-010 | Exterior-face, eave, and wall-to-roof geometry tests |
-| SK-025 | Flat map-image layer MVP | In progress | SK-014 | Add/reopen map-image layer without elevation service |
+| SK-024 | Envelope alignment and roof closure | Done for v0.1.4 | SK-009, SK-010 | Exterior-face, eave, and wall-to-roof geometry tests |
+| SK-025 | Flat map-image layer MVP | Done for v0.1.4 | SK-014 | Add map-image layer without elevation service |
 | SK-026 | Expanded site-object library | In progress | SK-013 | Procedural asset placement and persistence smoke |
-| SK-027 | Carport and garage openings | In progress | SK-010 | Opening preview, clearance, persistence, and wall-void tests |
+| SK-027 | Carport and garage openings | Done for v0.1.4 | SK-010 | Preset/override and shared wall-void tests |
 | SK-028 | Redistributable asset-pack policy | Todo | SK-013, SK-026 | License review and import workflow documentation |
 | SK-029 | Wall corner joinery | Todo | SK-009, SK-011 | Miter/trim geometry tests for straight and angled wall junctions |
 | SK-030 | Builder floor-isolation visibility | Todo | SK-009, SK-010 | Multi-floor Builder visibility smoke |
@@ -40,6 +40,9 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-032 | Delete selected scene items | Todo | SK-007, SK-013 | Keyboard deletion, confirmation, undo, and persistence tests |
 | SK-033 | Primitives, polygon faces, and extrusion | In progress | SK-007, SK-013 | Persisted polygon/extrusion geometry and desktop modelling smoke |
 | SK-034 | Viewport tools, scene clipboard, clipping, and wall angles | Done for v0.1.4 | SK-007, SK-009, SK-013 | Clipboard undo, clipping-plane unit tests, and desktop modelling smoke |
+| SK-035 | Reliable high-resolution satellite capture | Done for v0.1.4 | SK-025 | JPEG capture retry unit and live-provider smoke |
+| SK-036 | Footprint-aware automatic pitched roof | Done for v0.1.4 | SK-010, SK-024 | L-shape, rotated, and irregular-footprint geometry tests |
+| SK-037 | Builder feedback and compact section controls | Done for v0.1.4 | SK-021, SK-027, SK-034 | Immediate-angle, contrast, carport, and clipping-handle smoke/tests |
 
 ## Ticket details
 
@@ -174,7 +177,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Implemented**
 
-- Grid and construction-axis snapping, closure snapping, 5° Shift+wheel offset, provisional geometry, direct numeric input, validation, area, perimeter, and automatic transition to wall work.
+- Grid and construction-axis snapping, closure snapping, 5° Ctrl+wheel offset, provisional geometry, direct numeric input, validation, area, perimeter, and automatic transition to wall work.
 - Builder uses a locked orthographic top view with no camera rotation; nearby vertices and edges take priority over axes and grid using an aggressive screen-scaled snap radius.
 - Projected SVG dimension lines, end stops, aligned millimetre labels, and Builder-only display.
 - Self-intersection, zero-length, too-few-points, and zero-area checks. Crossing and duplicate edges are rejected before entering the draft; Backspace and the visible Undo last point action recover individual vertices without discarding the polygon.
@@ -189,7 +192,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Direct input produces a 5000×8000 mm closed foundation.
 - Area displays 40.00 m² and perimeter 26,000 mm.
-- Shift+wheel changes the active axis exactly 5° per detent and does not zoom.
+- Ctrl+wheel changes the active axis exactly 5° per detent and does not zoom.
 
 ### SK-009 — Floors and wall modelling
 
@@ -207,7 +210,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Automatic exterior walls now align their outer face to the footprint boundary for either winding; add explicit visual tests for manual inside/centre/outside overrides.
 - Recompute only auto-classified walls after footprint edits.
 
-### SK-010 — Openings, stairs, and gable roof
+### SK-010 — Openings, stairs, and automatic pitched roof
 
 **Outcome:** The complete building shell includes usable vertical circulation and openings.
 
@@ -215,13 +218,14 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Door/window placement on the nearest wall with defaults, sill constraints, property editing, overlap validation, and actual wall void geometry made from non-overlapping wall pieces.
 - Straight-stair riser derivation, rendered steps, and stair clearance cut from the slab above.
-- Thick gable roof panels with pitch, overhang, thickness, ridge rotation, and flip controls; panel rotation now rises from each eave to the ridge rather than forming an inverted gable.
+- One automatic, normal pitched-roof system with editable pitch, overhang, and thickness. Its primary ridge follows the longest footprint direction, while orthogonal protrusions receive smaller cross-roof modules merged into the primary surface.
+- The roof is a closed solid whose underside begins at the final wall top, preventing the final-storey wall from showing through it.
 - Door/window placement previews use a wide wall snap band, translucent opening box, validity colour, and left/right clearances to the nearest wall end or opening. Finalized openings keep those dimensions visible in Builder mode.
 
 **Todo / hardening**
 
-- Clip roof panels to arbitrary concave footprints; the current first-release generator follows oriented footprint bounds.
-- Add explicit ridge edge selection in addition to 90° ridge rotation.
+- Improve valley/eave topology for deeply nested concave plans and non-orthogonal protrusions; irregular footprints currently receive a stable single longest-direction roof fallback.
+- Move roof generation into the Manifold geometry worker and add watertight volume goldens.
 - Add one-click dependency confirmation when deleting floors, stairs, or openings.
 
 ### SK-011 — Geometry worker and Manifold integration
@@ -422,7 +426,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Outcome:** A foundation stays unmistakable against a light or dark canvas, and every blank-canvas click has an obvious, dependable grid target.
 
-**In progress**
+**Done for v0.1.4**
 
 - Increased the Builder grid opacity and added a high-contrast translucent foundation fill, dark draft edge, and orange current snap glyph.
 - Grid remains the fallback after explicit vertex, edge, and construction-axis targets; blank-canvas points snap to the configured grid.
@@ -435,15 +439,17 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **In progress**
 
 - Corrected automatic external-wall alignment for both clockwise and counter-clockwise footprints so the wall solid grows toward the interior.
-- Roof elevation now starts at the final wall top, and the default gable is a closed, triangulated footprint volume with roof-edge infill rather than separate bounded panels.
-- Geometry unit tests cover both footprint windings and an L-shaped roof's enclosing bounds.
-- Remaining: explicit ridge-edge selection, an exact offset algorithm for concave overhangs, and visual coverage for rotated foundations.
+- Roof elevation starts at the final wall top. The closed, triangulated roof volume includes fascia/gable infill and no longer leaves daylight between the final storey and roof.
+- The generator derives its main axis from the longest footprint edge, decomposes orthogonal concave plans into a primary roof and smaller merged cross-roofs, and uses a stable longest-direction fallback for irregular angled plans.
+- A line-intersection offset preserves the specified overhang around the real footprint instead of expanding a global bounding box.
+- Geometry unit tests cover both footprint windings, an L-shaped extension, rotated L plans, irregular angled footprints, finite vertices, eave elevation, and enclosing bounds. The desktop smoke captures the roof in Architecture mode.
+- Follow-on hardening is limited to nested/non-orthogonal roof intersections and worker-backed watertight volume goldens.
 
 ### SK-025 — Flat map-image layer MVP
 
 **Outcome:** A selected Norwegian map area can be added as a cached, flat Z=0 image plane even when elevation/LiDAR services are unavailable.
 
-**In progress**
+**Done for v0.1.4**
 
 - Rebuilt the workflow from the proven sibling SiteForge/Yard Planner pattern, adapted to Electron with a Leaflet raster selector so it does not compete with the Three.js viewport for WebGL. It provides native pan/zoom, map-native polygon clicks, explicit finish/undo/clear actions, and a one-click Use visible map area option.
 - Search flies to live Geonorge place results. Satellite and topographic modes now use matching Esri preview and extraction sources instead of a fragile capabilities-derived preview paired with a different capture source.
@@ -451,13 +457,14 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 - Render the selected vertices and closed polygon directly on the map, report dimensions and area, and reject selections wider or taller than 2 km.
 - Cache the image through the narrow Electron IPC allow-list, add it as a clipped Z=0 scene surface with source bounds and attribution, select it, and frame it automatically after import.
 - Unit coverage verifies bounds selection, metre/area calculation, aspect-correct extraction, persisted polygon data, UV mapping, and clipped render geometry. The live Electron smoke searches, validates visible-bounds capture, draws and finishes a polygon, imports it, and confirms the scene layer.
-- Remaining: offline-restart E2E, editable polygon drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and high-resolution orthophoto remain follow-on work rather than prerequisites.
+- Satellite extraction uses high-quality JPEG rather than multi-megabyte PNG. Transient HTTP 5xx, 408, and 429 responses retry the same selected extent at 4096, 3072, then 2048 maximum pixels; topographic extraction remains lossless PNG.
+- Remaining: offline-restart E2E, editable polygon drag handles, blend preview, and a dedicated attribution panel. Elevation, GeoTIFF, LiDAR-derived terrain, and credential-backed orthophoto remain follow-on work rather than prerequisites.
 
 ### SK-026 — Expanded site-object library
 
 **Outcome:** Site composition includes practical, redistributable procedural garden and utility objects.
 
-**In progress**
+**Done for v0.1.4**
 
 - Added scalable hedge and fence segments, a garbage shed, flag pole, and birch tree alongside the existing car, trees, person, and box.
 - Definitions remain project-level built-ins and reuse the existing instanced-placement flow.
@@ -469,9 +476,9 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **In progress**
 
-- Added a Carport Builder tool with a 3,000×2,200 mm default plus 2,500×2,100 and 3,000×2,200 mm presets in Properties.
+- Added a Carport Builder tool with one intentionally simple 3,000×2,200 mm preset. Selecting the placed opening exposes editable clear width and clear height overrides.
 - It reuses the wide wall snapping, translucent preview, clearance dimensions, invalid-placement handling, property editing, and Boolean wall-opening path.
-- Schema coverage persists the new opening type; add a dedicated desktop placement/persistence E2E next.
+- Component coverage verifies the single preset and custom 3,600×2,400 mm override; schema coverage persists the opening type. Add a dedicated save/reopen desktop journey during broader persistence hardening.
 
 ### SK-028 — Redistributable asset-pack policy
 
@@ -548,11 +555,46 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Added a bottom-centred viewport toolbar for selection, transforms, polygon massing, building creation, object placement/import, terrain import, clipboard actions, Builder tools, roof creation, and clipping. The left panel now concentrates on the project-local building library instead of repeating direct modelling actions.
 - Added Ctrl+C/Ctrl+V and visible Copy/Paste actions for building and asset instances. Pasted instances retain their shared definition and transform, receive a unique ID/name and cascading 500 mm XY offset, are selected immediately, and participate in Undo/Redo.
-- Added a non-destructive global clipping plane with X/Y/Z normals, millimetre position slider/direct input, direction flip, visible helper, enable/disable, and reset controls.
+- Added a non-destructive global clipping plane with X/Y/Z handle axes, direction flip, enable/disable, and reset. Its compact popover reports the live millimetre offset; an in-scene transform handle moves the plane along the selected axis.
 - Wall creation resets to the orthogonal X/Y construction axes whenever the Wall tool is selected. Only Ctrl+wheel changes the construction-axis offset in the configured 5 degree increments; normal scrolling remains camera navigation.
 - Satellite/map captures now use the provider's supported 4096 pixel maximum dimension and target up to 8 pixels per metre. The selection summary reports the exact capture dimensions before download. Source imagery resolution still limits real ground detail, and licensed Norwegian orthophoto remains a separate provider ticket.
 - Unit coverage verifies repeated undoable clipboard pastes, clipping-plane placement/direction, orthogonal and offset construction axes, and adaptive high-resolution captures. The desktop smoke exercises the toolbar, Ctrl+wheel angle adjustment, Ctrl+C/Ctrl+V, and clipping enable/reset.
 - Remaining: persist optional clipping presets in project/session preferences, add keyboard discovery/help, and evaluate credential-backed Norge i bilder orthophoto without storing secrets in project archives.
+
+### SK-035 - Reliable high-resolution satellite capture
+
+**Outcome:** Satellite map import does not fail merely because its image payload is much heavier than the equivalent topographic capture.
+
+**Done for v0.1.4**
+
+- Request satellite exports as JPEG at quality 92 while retaining matching source bounds, aspect ratio, attribution, and polygon clipping.
+- Retry retryable provider failures at 75% and 50% of the requested pixel dimensions without changing the geographic selection.
+- Validate every response as an image before caching it, retain topo as PNG32, and surface one actionable failure only after the retry sequence is exhausted.
+- Unit coverage locks the retry dimensions and satellite/topographic formats; the live provider smoke exercises the actual satellite path.
+
+### SK-036 - Footprint-aware automatic pitched roof
+
+**Outcome:** The single supported roof type produces a conventional roughly 30° house roof automatically, including smaller roofs over normal extensions.
+
+**Done for v0.1.4**
+
+- The longest footprint edge determines the primary ridge direction; pitch defaults to 30° and remains editable with overhang and thickness.
+- Orthogonal concave footprints are decomposed into occupied rectangular runs. The largest run becomes the main roof and protruding runs become smaller cross-roof modules.
+- Overlapping modules merge through a shared height field, producing continuous valleys instead of intersecting loose roof meshes.
+- Irregular angled footprints fall back to one safe longest-direction module instead of producing invalid vertices.
+- Geometry regression tests cover L-shapes, rotated extensions, irregular footprints, roof elevation, bounds, and finite mesh data; desktop smoke provides a perspective artifact.
+
+### SK-037 - Builder feedback and compact section controls
+
+**Outcome:** Construction intent is immediately visible while drawing, and section inspection consumes minimal toolbar space.
+
+**Done for v0.1.4**
+
+- Foundation, wall, snap, opening, and dimension helper colours adapt to the configured background; light canvases use a darker blue/green palette with stronger contrast.
+- Foundation and Wall tools show a cursor-adjacent `Right angle · 0°` or `Axis offset · N°` label. Ctrl+wheel updates both the label and provisional snapped segment immediately, without waiting for pointer movement.
+- Clipping uses a small in-scene axis handle and a compact popover containing only enable, axis, flip, reset, and the live offset readout.
+- Carport openings expose one default preset plus direct width/height overrides, keeping the normal workflow simple without preventing custom openings.
+- Unit/component coverage verifies clipping-handle conversion and carport overrides; the desktop smoke verifies immediate angle feedback and section-handle presence.
 
 ## Release acceptance checklist
 

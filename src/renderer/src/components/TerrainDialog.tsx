@@ -271,7 +271,7 @@ export function TerrainDialog({ open, onOpenChange }: Props) {
         verticalOffset: 0,
         widthMm: Math.max(1, selection.width * 1000),
         heightMm: Math.max(1, selection.height * 1000),
-        imageryArchivePath: `${id}-${imageryMode}.png`,
+        imageryArchivePath: `${id}-${imageryMode}.${imageryMode === "satellite" ? "jpg" : "png"}`,
         gridSize: [2, 2],
         elevationsMm: [0, 0, 0, 0],
         visible: true,

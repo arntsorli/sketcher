@@ -20,7 +20,7 @@ import type { ProjectDocument, Vec2, Wall } from "../../../shared/model";
 import { useEditorStore } from "../store";
 import { buildWallSolid } from "../workers/geometryClient";
 import type { WallSolidRequest } from "../workers/geometryTypes";
-import { createClippingPlane } from "./clipping";
+import { clippingHandlePosition, clippingOffsetFromHandle, createClippingPlane } from "./clipping";
 import { setExportRoot } from "./sceneBridge";
 import { createBuildingGroup, createBuiltinAsset, createProjectContent } from "./sceneGeometry";
 
@@ -62,6 +62,11 @@ function entityRoot(object: THREE.Object3D | null): { type?: string; id?: string
 
 const DEFAULT_CANVAS_BACKGROUND = "#dfe7ee";
 
+function isLightBackground(backgroundColor: string): boolean {
+  const background = new THREE.Color(backgroundColor);
+  return background.r * 0.2126 + background.g * 0.7152 + background.b * 0.0722 > 0.45;
+}
+
 type SceneEngine = {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
@@ -76,6 +81,8 @@ type SceneEngine = {
   transform: TransformControls;
   grid: THREE.GridHelper;
   clippingHelper: THREE.PlaneHelper;
+  clippingHandle: THREE.Mesh;
+  clippingTransform: TransformControls;
   content: THREE.Group;
   draft: THREE.Group;
   raycaster: THREE.Raycaster;
@@ -87,8 +94,7 @@ function applyCanvasAppearance(engine: SceneEngine, backgroundColor: string): vo
   engine.scene.background = background;
   if (engine.scene.fog) engine.scene.fog.color.copy(background);
   engine.renderer.setClearColor(background);
-  const luminance = background.r * 0.2126 + background.g * 0.7152 + background.b * 0.0722;
-  const isLight = luminance > 0.45;
+  const isLight = isLightBackground(backgroundColor);
   const colors = isLight ? [0x536675, 0xa4b2bc] : [0x7890a2, 0x2d3b46];
   const materials = Array.isArray(engine.grid.material)
     ? engine.grid.material
@@ -253,6 +259,7 @@ export function SceneCanvas() {
   const hostRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const engineRef = useRef<SceneEngine | null>(null);
+  const rawPointerRef = useRef<Vec2 | null>(null);
   const [dimensions, setDimensions] = useState<DimensionLine[]>([]);
   const [inputPosition, setInputPosition] = useState({ x: 0, y: 0, visible: false });
 
@@ -359,11 +366,17 @@ export function SceneCanvas() {
         inverted: false,
         showHelper: true,
       }),
-      12,
-      0xffb44c,
+      6,
+      0x5b402d,
     );
     clippingHelper.visible = false;
-    scene.add(clippingHelper);
+    const clippingHandle = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.14),
+      new THREE.MeshBasicMaterial({ color: 0x6e4329, depthTest: false }),
+    );
+    clippingHandle.visible = false;
+    clippingHandle.renderOrder = 2000;
+    scene.add(clippingHelper, clippingHandle);
 
     const hemisphere = new THREE.HemisphereLight(0xdce7f2, 0x273039, 2.2);
     const sun = new THREE.DirectionalLight(0xffffff, 2.3);
@@ -401,6 +414,24 @@ export function SceneCanvas() {
     transform.addEventListener("dragging-changed", (event) => {
       orbit.enabled = !(event as THREE.Event & { value: boolean }).value;
     });
+    const clippingTransform = new TransformControls(architectureCamera, renderer.domElement);
+    clippingTransform.setMode("translate");
+    clippingTransform.setSpace("world");
+    clippingTransform.setSize(0.62);
+    clippingTransform.enabled = false;
+    clippingTransform.attach(clippingHandle);
+    clippingTransform.getHelper().visible = false;
+    scene.add(clippingTransform.getHelper());
+    clippingTransform.addEventListener("dragging-changed", (event) => {
+      orbit.enabled = !(event as THREE.Event & { value: boolean }).value;
+    });
+    clippingTransform.addEventListener("objectChange", () => {
+      const state = useEditorStore.getState();
+      state.setClipping({
+        offsetMm: clippingOffsetFromHandle(state.clipping.axis, clippingHandle.position),
+        enabled: true,
+      });
+    });
 
     const engine = {
       scene,
@@ -416,6 +447,8 @@ export function SceneCanvas() {
       transform,
       grid,
       clippingHelper,
+      clippingHandle,
+      clippingTransform,
       content,
       draft: draftGroup,
       raycaster: new THREE.Raycaster(),
@@ -450,6 +483,7 @@ export function SceneCanvas() {
       resizeObserver.disconnect();
       setExportRoot(null);
       transform.dispose();
+      clippingTransform.dispose();
       orbit.dispose();
       composer.dispose();
       renderer.dispose();
@@ -460,8 +494,11 @@ export function SceneCanvas() {
 
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine) return;
-    applyCanvasAppearance(engine, settings?.backgroundColor ?? DEFAULT_CANVAS_BACKGROUND);
+    const host = hostRef.current;
+    if (!engine || !host) return;
+    const background = settings?.backgroundColor ?? DEFAULT_CANVAS_BACKGROUND;
+    applyCanvasAppearance(engine, background);
+    host.dataset.canvasTone = isLightBackground(background) ? "light" : "dark";
   }, [settings?.backgroundColor]);
 
   useEffect(() => {
@@ -471,8 +508,19 @@ export function SceneCanvas() {
     const plane = createClippingPlane(clipping);
     engine.renderer.clippingPlanes = clipping.enabled ? [plane] : [];
     engine.clippingHelper.plane.copy(plane);
-    engine.clippingHelper.visible = clipping.enabled && clipping.showHelper;
+    engine.clippingHelper.visible = clipping.enabled;
+    if (!engine.clippingTransform.dragging) {
+      engine.clippingHandle.position.copy(clippingHandlePosition(clipping));
+    }
+    engine.clippingHandle.visible = clipping.enabled;
+    engine.clippingTransform.enabled = clipping.enabled;
+    engine.clippingTransform.getHelper().visible = clipping.enabled;
+    engine.clippingTransform.showX = clipping.axis === "x";
+    engine.clippingTransform.showY = clipping.axis === "y";
+    engine.clippingTransform.showZ = clipping.axis === "z";
     host.dataset.clippingEnabled = String(clipping.enabled);
+    host.dataset.clippingAxis = clipping.axis;
+    host.dataset.clippingOffset = String(clipping.offsetMm);
   }, [clipping]);
 
   useEffect(() => {
@@ -533,6 +581,7 @@ export function SceneCanvas() {
     engine.renderPass.camera = engine.camera;
     engine.outline.renderCamera = engine.camera;
     engine.transform.camera = engine.camera;
+    engine.clippingTransform.camera = engine.camera;
     engine.orbit.update();
   }, [mode, activeBuildingId]);
 
@@ -641,7 +690,11 @@ export function SceneCanvas() {
     );
     if (!object) return;
     engine.outline.selectedObjects = [object];
-    if (mode === "architecture" && (selection.type === "building" || selection.type === "asset")) {
+    if (
+      mode === "architecture" &&
+      !clipping.enabled &&
+      (selection.type === "building" || selection.type === "asset")
+    ) {
       engine.transform.attach(object);
       const onMouseUp = () => {
         const current = useEditorStore.getState();
@@ -664,7 +717,7 @@ export function SceneCanvas() {
       engine.transform.addEventListener("mouseUp", onMouseUp);
       return () => engine.transform.removeEventListener("mouseUp", onMouseUp);
     }
-  }, [selection, mode, project, commit]);
+  }, [selection, mode, project, commit, clipping.enabled]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -676,6 +729,24 @@ export function SceneCanvas() {
       openingPreview ? (openingPreview.valid ? "valid" : "invalid") : "none",
     );
     hostRef.current?.setAttribute("data-placement-preview", "none");
+    const darkHelpers = isLightBackground(settings?.backgroundColor ?? DEFAULT_CANVAS_BACKGROUND);
+    const helpColors = darkHelpers
+      ? {
+          fill: 0x203f50,
+          line: 0x183746,
+          marker: 0x31566a,
+          closure: 0x315a45,
+          opening: 0x315b4f,
+          openingLine: 0x284a42,
+        }
+      : {
+          fill: 0x179bd1,
+          line: 0x65c5ee,
+          marker: 0x9bddff,
+          closure: 0x37e0a5,
+          opening: 0x36c7a1,
+          openingLine: 0x1ba990,
+        };
     const points = [...draft.points];
     if (draft.wallStart) points.push(draft.wallStart);
     if (draft.hover && (draft.points.length > 0 || draft.wallStart)) points.push(draft.hover);
@@ -687,7 +758,7 @@ export function SceneCanvas() {
         const fill = new THREE.Mesh(
           new THREE.ShapeGeometry(shape),
           new THREE.MeshBasicMaterial({
-            color: 0x179bd1,
+            color: helpColors.fill,
             transparent: true,
             opacity: 0.22,
             depthTest: false,
@@ -703,7 +774,7 @@ export function SceneCanvas() {
       );
       const line = new THREE.Line(
         geometry,
-        new THREE.LineBasicMaterial({ color: 0x007db8, depthTest: false }),
+        new THREE.LineBasicMaterial({ color: helpColors.line, depthTest: false }),
       );
       line.renderOrder = 999;
       engine.draft.add(line);
@@ -718,7 +789,7 @@ export function SceneCanvas() {
         const marker = new THREE.Mesh(
           new THREE.SphereGeometry(isClosureTarget ? 0.11 : 0.06, 12, 8),
           new THREE.MeshBasicMaterial({
-            color: isClosureTarget ? 0x37e0a5 : 0x9bddff,
+            color: isClosureTarget ? helpColors.closure : helpColors.marker,
             depthTest: false,
           }),
         );
@@ -796,7 +867,7 @@ export function SceneCanvas() {
       const guide = new THREE.Mesh(
         new THREE.BoxGeometry(wallLength / 1000, (OPENING_SNAP_RADIUS_MM * 2) / 1000, 0.006),
         new THREE.MeshBasicMaterial({
-          color: openingPreview.valid ? 0x36c7a1 : 0xe26d71,
+          color: openingPreview.valid ? helpColors.opening : 0xe26d71,
           transparent: true,
           opacity: 0.09,
           depthTest: false,
@@ -813,7 +884,7 @@ export function SceneCanvas() {
           0.03,
         ),
         new THREE.MeshBasicMaterial({
-          color: openingPreview.valid ? 0x20d5ac : 0xff6d72,
+          color: openingPreview.valid ? helpColors.opening : 0xff6d72,
           transparent: true,
           opacity: 0.62,
           depthTest: false,
@@ -829,14 +900,23 @@ export function SceneCanvas() {
           new THREE.Vector3(wall.end.x / 1000, wall.end.y / 1000, 0.07),
         ]),
         new THREE.LineBasicMaterial({
-          color: openingPreview.valid ? 0x1ba990 : 0xd25c60,
+          color: openingPreview.valid ? helpColors.openingLine : 0xd25c60,
           depthTest: false,
         }),
       );
       guideLine.renderOrder = 999;
       engine.draft.add(guideLine);
     }
-  }, [draft, mode, openingPreview, placementAssetId, placementDefinitionId, project, tool]);
+  }, [
+    draft,
+    mode,
+    openingPreview,
+    placementAssetId,
+    placementDefinitionId,
+    project,
+    settings?.backgroundColor,
+    tool,
+  ]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -857,6 +937,7 @@ export function SceneCanvas() {
         return null;
       }
       const rawPoint = { x: hit.x * 1000, y: hit.y * 1000 };
+      rawPointerRef.current = rawPoint;
       const current = useEditorStore.getState();
       if (
         current.mode === "builder" &&
@@ -885,7 +966,7 @@ export function SceneCanvas() {
     };
 
     const onPointerMove = (event: PointerEvent) => {
-      if (engine.transform.dragging) return;
+      if (engine.transform.dragging || engine.clippingTransform.dragging) return;
       const point = pointerPoint(event);
       if (
         point &&
@@ -898,7 +979,8 @@ export function SceneCanvas() {
     };
 
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button !== 0 || engine.transform.dragging) return;
+      if (event.button !== 0 || engine.transform.dragging || engine.clippingTransform.dragging)
+        return;
       const point = pointerPoint(event);
       if (!point) return;
       if (mode === "builder") {
@@ -945,9 +1027,18 @@ export function SceneCanvas() {
     const onWheel = (event: WheelEvent) => {
       if (mode !== "builder" || !event.ctrlKey || !["foundation", "wall"].includes(tool)) return;
       event.preventDefault();
-      const increment = project?.settings.angleIncrement ?? 5;
-      const next = draft.axisAngle + (event.deltaY > 0 ? increment : -increment);
-      setDraft({ axisAngle: ((next % 180) + 180) % 180 });
+      const state = useEditorStore.getState();
+      const increment = state.project?.settings.angleIncrement ?? 5;
+      const next = state.draft.axisAngle + (event.deltaY > 0 ? increment : -increment);
+      const axisAngle = ((next % 180) + 180) % 180;
+      const origin = state.tool === "wall" ? state.draft.wallStart : state.draft.points.at(-1);
+      const rawHover = rawPointerRef.current ?? state.draft.hover;
+      state.setDraft({
+        axisAngle,
+        ...(origin && rawHover
+          ? { hover: lockToConstructionAxis(origin, rawHover, axisAngle) }
+          : {}),
+      });
     };
 
     host.addEventListener("pointermove", onPointerMove);
@@ -1231,6 +1322,17 @@ export function SceneCanvas() {
           );
         })}
       </svg>
+      {mode === "builder" && draft.hover && (tool === "foundation" || tool === "wall") && (
+        <div
+          className="angle-offset-label"
+          style={{
+            left: inputPosition.x + (inputPosition.visible ? 62 : 14),
+            top: inputPosition.y,
+          }}
+        >
+          {draft.axisAngle === 0 ? "Right angle · 0°" : `Axis offset · ${draft.axisAngle}°`}
+        </div>
+      )}
       {inputPosition.visible && (
         <input
           ref={inputRef}
@@ -1239,8 +1341,15 @@ export function SceneCanvas() {
           style={{ left: inputPosition.x, top: inputPosition.y }}
           value={
             draft.numericInput ||
-            (draft.hover && lastDraftPoint
-              ? Math.round(distance(lastDraftPoint, draft.hover)).toString()
+            (draft.hover && (tool === "wall" ? draft.wallStart : lastDraftPoint)
+              ? Math.round(
+                  distance(
+                    tool === "wall"
+                      ? (draft.wallStart ?? draft.hover)
+                      : (lastDraftPoint ?? draft.hover),
+                    draft.hover,
+                  ),
+                ).toString()
               : "")
           }
           onChange={(event) => setDraft({ numericInput: event.target.value })}

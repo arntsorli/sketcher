@@ -3,6 +3,7 @@ import path from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, net, shell, type WebContents } from "electron";
 import packageMetadata from "../../package.json";
 import type { ProjectArchive } from "../shared/ipc";
+import { mapImageRequestAttempts } from "../shared/mapImage";
 import type { GlobalSettings } from "../shared/model";
 import {
   clearRecovery,
@@ -278,21 +279,35 @@ function registerIpc(): void {
       if (parsed.protocol !== "https:" || !trustedHosts.has(parsed.hostname)) {
         throw new Error("Only the configured public map-image provider is allowed.");
       }
-      const response = await net.fetch(parsed.toString(), {
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!response.ok) {
-        const details = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 240);
-        throw new Error(
-          `Map image request failed (${response.status})${details ? `: ${details}` : "."}`,
-        );
+      let lastFailure = "The map provider did not return an image.";
+      for (const attemptUrl of mapImageRequestAttempts(parsed.toString())) {
+        let response: Response;
+        try {
+          response = await net.fetch(attemptUrl, {
+            signal: AbortSignal.timeout(45_000),
+          });
+        } catch (error) {
+          lastFailure =
+            error instanceof Error
+              ? `Map image request failed: ${error.message}`
+              : "Map image request failed before the provider responded.";
+          continue;
+        }
+        if (!response.ok) {
+          const details = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 240);
+          lastFailure = `Map image request failed (${response.status})${details ? `: ${details}` : "."}`;
+          if (response.status >= 500 || response.status === 408 || response.status === 429)
+            continue;
+          throw new Error(lastFailure);
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const contentType = response.headers.get("content-type") ?? "";
+        if (contentType.startsWith("image/") && bytes.byteLength >= 1_000) {
+          return Buffer.from(bytes).toString("base64");
+        }
+        lastFailure = "The map provider returned an invalid image.";
       }
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.startsWith("image/") || bytes.byteLength < 1_000) {
-        throw new Error("The map provider returned an invalid image. Try again or change imagery.");
-      }
-      return Buffer.from(bytes).toString("base64");
+      throw new Error(`${lastFailure} Sketcher also tried smaller fallback captures.`);
     }),
   );
 

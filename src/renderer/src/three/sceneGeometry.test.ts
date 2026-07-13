@@ -1,4 +1,4 @@
-import { Box3, type Object3D } from "three";
+import { Box3, type Mesh, type Object3D } from "three";
 import { describe, expect, it } from "vitest";
 import type {
   AssetDefinition,
@@ -11,6 +11,7 @@ import {
   createBuildingGroup,
   createBuiltinAsset,
   createTerrainMesh,
+  deriveAutomaticRoofLayout,
 } from "./sceneGeometry";
 
 function buildingFor(footprint: Vec2[]): BuildingDefinition {
@@ -106,22 +107,59 @@ describe("building envelope geometry", () => {
     expect(new Box3().setFromObject(childByType(clockwise, "wall")).min.x).toBeCloseTo(0);
   });
 
-  it("creates a closed roof volume over an L-shaped footprint at the wall top", () => {
-    const group = createBuildingGroup(
-      buildingFor([
-        { x: 0, y: 0 },
-        { x: 6000, y: 0 },
-        { x: 6000, y: 2500 },
-        { x: 2500, y: 2500 },
-        { x: 2500, y: 5000 },
-        { x: 0, y: 5000 },
-      ]),
-    );
-    const roofBounds = new Box3().setFromObject(childByType(group, "roof"));
-    expect(roofBounds.min.z).toBeCloseTo(2.7);
+  it("creates merged primary and cross-gable roofs over an L-shaped footprint", () => {
+    const footprint = [
+      { x: 0, y: 0 },
+      { x: 6000, y: 0 },
+      { x: 6000, y: 2500 },
+      { x: 2500, y: 2500 },
+      { x: 2500, y: 5000 },
+      { x: 0, y: 5000 },
+    ];
+    const layout = deriveAutomaticRoofLayout(footprint);
+    expect(layout.axisU.x).toBeCloseTo(1);
+    expect(layout.axisU.y).toBeCloseTo(0);
+    expect(layout.modules).toHaveLength(2);
+    expect(layout.modules[0]).toMatchObject({ primary: true, ridgeAxis: "u" });
+    expect(layout.modules[1]).toMatchObject({ primary: false, ridgeAxis: "v" });
+
+    const roof = childByType(createBuildingGroup(buildingFor(footprint)), "roof");
+    const roofBounds = new Box3().setFromObject(roof);
+    expect(roof.userData.roofModuleCount).toBe(2);
+    expect(roofBounds.min.z).toBeCloseTo(2.9);
     expect(roofBounds.max.z).toBeGreaterThan(2.9);
     expect(roofBounds.max.x).toBeGreaterThan(6);
     expect(roofBounds.max.y).toBeGreaterThan(5);
+  });
+
+  it("keeps the automatic roof stable for rotated extensions and angled footprints", () => {
+    const angle = Math.PI / 6;
+    const rotate = ({ x, y }: { x: number; y: number }) => ({
+      x: x * Math.cos(angle) - y * Math.sin(angle),
+      y: x * Math.sin(angle) + y * Math.cos(angle),
+    });
+    const rotatedL = [
+      { x: 0, y: 0 },
+      { x: 6000, y: 0 },
+      { x: 6000, y: 2500 },
+      { x: 2500, y: 2500 },
+      { x: 2500, y: 5000 },
+      { x: 0, y: 5000 },
+    ].map(rotate);
+    expect(deriveAutomaticRoofLayout(rotatedL).modules).toHaveLength(2);
+
+    const angled = [
+      { x: 0, y: 0 },
+      { x: 5400, y: 900 },
+      { x: 4700, y: 4200 },
+      { x: -700, y: 3500 },
+    ];
+    const layout = deriveAutomaticRoofLayout(angled);
+    expect(layout.modules).toHaveLength(1);
+    const roof = childByType(createBuildingGroup(buildingFor(angled)), "roof") as Mesh;
+    const positions = (roof.geometry.getAttribute("position")?.array ?? []) as ArrayLike<number>;
+    expect(Array.from(positions).every(Number.isFinite)).toBe(true);
+    expect(new Box3().setFromObject(roof).min.z).toBeCloseTo(2.9);
   });
 
   it("miters exterior walls at a right-angle foundation corner", () => {

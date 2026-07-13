@@ -49,5 +49,7 @@ describe("map area selection", () => {
     expect(url.pathname).toContain("World_Imagery/MapServer/export");
     expect(url.searchParams.get("size")).toBe("1600,800");
     expect(url.searchParams.get("bboxSR")).toBe("4326");
+    expect(url.searchParams.get("format")).toBe("jpg");
+    expect(url.searchParams.get("compressionQuality")).toBe("92");
   });
 });

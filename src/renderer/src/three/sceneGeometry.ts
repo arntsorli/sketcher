@@ -26,7 +26,7 @@ const materials = {
   slab: material(0x73808c),
   externalWall: material(0xd9d5cc),
   internalWall: material(0xc7c3ba),
-  roof: material(0x444b55),
+  roof: material(0x59636f),
   stair: material(0xb9b0a2),
   terrain: material(0x6d7b64),
 };
@@ -363,75 +363,416 @@ function wallWithOpenings(
   );
 }
 
+interface RoofPoint {
+  x: number;
+  y: number;
+}
+
+export interface AutomaticRoofModule {
+  minU: number;
+  maxU: number;
+  minV: number;
+  maxV: number;
+  ridgeAxis: "u" | "v";
+  primary: boolean;
+}
+
+export interface AutomaticRoofLayout {
+  axisU: RoofPoint;
+  axisV: RoofPoint;
+  modules: AutomaticRoofModule[];
+}
+
+interface RoofCandidate extends Omit<AutomaticRoofModule, "ridgeAxis" | "primary"> {
+  cells: Set<string>;
+}
+
+function signedPolygonArea(points: RoofPoint[]): number {
+  return (
+    points.reduce((sum, point, index) => {
+      const next = points[(index + 1) % points.length];
+      return next ? sum + point.x * next.y - next.x * point.y : sum;
+    }, 0) / 2
+  );
+}
+
+function pointInsidePolygon(point: RoofPoint, polygon: RoofPoint[]): boolean {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const current = polygon[index];
+    const prior = polygon[previous];
+    if (!current || !prior) continue;
+    if (
+      current.y > point.y !== prior.y > point.y &&
+      point.x < ((prior.x - current.x) * (point.y - current.y)) / (prior.y - current.y) + current.x
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function localPoint(point: RoofPoint, layout: Pick<AutomaticRoofLayout, "axisU" | "axisV">) {
+  return {
+    x: point.x * layout.axisU.x + point.y * layout.axisU.y,
+    y: point.x * layout.axisV.x + point.y * layout.axisV.y,
+  };
+}
+
+function uniqueCoordinates(values: number[]): number[] {
+  return [...new Set(values.map((value) => Math.round(value * 1000) / 1000))].sort(
+    (left, right) => left - right,
+  );
+}
+
+function candidateRuns(cells: boolean[][], us: number[], vs: number[]): RoofCandidate[] {
+  const candidates: RoofCandidate[] = [];
+  const scan = (transpose: boolean) => {
+    const outerCount = transpose ? us.length - 1 : vs.length - 1;
+    const innerCount = transpose ? vs.length - 1 : us.length - 1;
+    let active = new Map<string, RoofCandidate>();
+    for (let outer = 0; outer < outerCount; outer += 1) {
+      const runs: Array<{ start: number; end: number }> = [];
+      let start = -1;
+      for (let inner = 0; inner <= innerCount; inner += 1) {
+        const occupied =
+          inner < innerCount &&
+          (transpose ? Boolean(cells[inner]?.[outer]) : Boolean(cells[outer]?.[inner]));
+        if (occupied && start < 0) start = inner;
+        if (!occupied && start >= 0) {
+          runs.push({ start, end: inner });
+          start = -1;
+        }
+      }
+      const nextActive = new Map<string, RoofCandidate>();
+      for (const run of runs) {
+        const key = `${run.start}:${run.end}`;
+        const existing = active.get(key);
+        const candidate: RoofCandidate =
+          existing ??
+          (transpose
+            ? {
+                minU: us[outer] ?? 0,
+                maxU: us[outer + 1] ?? 0,
+                minV: vs[run.start] ?? 0,
+                maxV: vs[run.end] ?? 0,
+                cells: new Set<string>(),
+              }
+            : {
+                minU: us[run.start] ?? 0,
+                maxU: us[run.end] ?? 0,
+                minV: vs[outer] ?? 0,
+                maxV: vs[outer + 1] ?? 0,
+                cells: new Set<string>(),
+              });
+        if (transpose) candidate.maxU = us[outer + 1] ?? candidate.maxU;
+        else candidate.maxV = vs[outer + 1] ?? candidate.maxV;
+        for (let inner = run.start; inner < run.end; inner += 1) {
+          const uIndex = transpose ? outer : inner;
+          const vIndex = transpose ? inner : outer;
+          candidate.cells.add(`${uIndex}:${vIndex}`);
+        }
+        nextActive.set(key, candidate);
+      }
+      for (const [key, candidate] of active) {
+        if (!nextActive.has(key)) candidates.push(candidate);
+      }
+      active = nextActive;
+    }
+    candidates.push(...active.values());
+  };
+  scan(false);
+  scan(true);
+  const unique = new Map<string, RoofCandidate>();
+  for (const candidate of candidates) {
+    const key = [candidate.minU, candidate.maxU, candidate.minV, candidate.maxV].join(":");
+    const existing = unique.get(key);
+    if (existing)
+      candidate.cells.forEach((cell) => {
+        existing.cells.add(cell);
+      });
+    else unique.set(key, candidate);
+  }
+  return [...unique.values()];
+}
+
+export function deriveAutomaticRoofLayout(footprint: RoofPoint[]): AutomaticRoofLayout {
+  let longest = { x: 1, y: 0, length: 0 };
+  for (let index = 0; index < footprint.length; index += 1) {
+    const start = footprint[index];
+    const end = footprint[(index + 1) % footprint.length];
+    if (!start || !end) continue;
+    const x = end.x - start.x;
+    const y = end.y - start.y;
+    const length = Math.hypot(x, y);
+    if (length > longest.length) longest = { x: x / length, y: y / length, length };
+  }
+  if (longest.x < -1e-6 || (Math.abs(longest.x) < 1e-6 && longest.y < 0)) {
+    longest.x *= -1;
+    longest.y *= -1;
+  }
+  const layout = {
+    axisU: { x: longest.x, y: longest.y },
+    axisV: { x: -longest.y, y: longest.x },
+  };
+  const local = footprint.map((point) => localPoint(point, layout));
+  const us = uniqueCoordinates(local.map((point) => point.x));
+  const vs = uniqueCoordinates(local.map((point) => point.y));
+  const fallback: AutomaticRoofModule = {
+    minU: Math.min(...local.map((point) => point.x)),
+    maxU: Math.max(...local.map((point) => point.x)),
+    minV: Math.min(...local.map((point) => point.y)),
+    maxV: Math.max(...local.map((point) => point.y)),
+    ridgeAxis: "u",
+    primary: true,
+  };
+  const orthogonal = local.every((point, index) => {
+    const next = local[(index + 1) % local.length];
+    return next ? Math.abs(next.x - point.x) < 1 || Math.abs(next.y - point.y) < 1 : true;
+  });
+  if (!orthogonal || us.length < 2 || vs.length < 2) return { ...layout, modules: [fallback] };
+  const cells = Array.from({ length: vs.length - 1 }, (_, vIndex) =>
+    Array.from({ length: us.length - 1 }, (_, uIndex) =>
+      pointInsidePolygon(
+        {
+          x: ((us[uIndex] ?? 0) + (us[uIndex + 1] ?? 0)) / 2,
+          y: ((vs[vIndex] ?? 0) + (vs[vIndex + 1] ?? 0)) / 2,
+        },
+        local,
+      ),
+    ),
+  );
+  const uncovered = new Set<string>();
+  cells.forEach((row, vIndex) => {
+    row.forEach((occupied, uIndex) => {
+      if (occupied) uncovered.add(`${uIndex}:${vIndex}`);
+    });
+  });
+  const candidates = candidateRuns(cells, us, vs);
+  const score = (candidate: RoofCandidate) =>
+    [...candidate.cells].reduce((sum, cell) => {
+      if (!uncovered.has(cell)) return sum;
+      const [uIndex, vIndex] = cell.split(":").map(Number);
+      return (
+        sum +
+        ((us[(uIndex ?? 0) + 1] ?? 0) - (us[uIndex ?? 0] ?? 0)) *
+          ((vs[(vIndex ?? 0) + 1] ?? 0) - (vs[vIndex ?? 0] ?? 0))
+      );
+    }, 0);
+  const totalArea = (candidate: RoofCandidate) =>
+    (candidate.maxU - candidate.minU) * (candidate.maxV - candidate.minV);
+  const primaryPool = candidates.filter(
+    (candidate) => candidate.maxU - candidate.minU >= candidate.maxV - candidate.minV,
+  );
+  const primary = (primaryPool.length ? primaryPool : candidates).sort(
+    (left, right) => totalArea(right) - totalArea(left),
+  )[0];
+  if (!primary) return { ...layout, modules: [fallback] };
+  const chosen: RoofCandidate[] = [primary];
+  primary.cells.forEach((cell) => {
+    uncovered.delete(cell);
+  });
+  while (uncovered.size > 0 && chosen.length < 8) {
+    const next = candidates
+      .filter((candidate) => !chosen.includes(candidate))
+      .sort((left, right) => score(right) - score(left) || totalArea(right) - totalArea(left))[0];
+    if (!next || score(next) <= 0) break;
+    chosen.push(next);
+    next.cells.forEach((cell) => {
+      uncovered.delete(cell);
+    });
+  }
+  return {
+    ...layout,
+    modules: chosen.map((candidate, index) => ({
+      minU: candidate.minU,
+      maxU: candidate.maxU,
+      minV: candidate.minV,
+      maxV: candidate.maxV,
+      ridgeAxis:
+        index === 0 || candidate.maxU - candidate.minU >= candidate.maxV - candidate.minV
+          ? "u"
+          : "v",
+      primary: index === 0,
+    })),
+  };
+}
+
+function offsetFootprint(footprint: RoofPoint[], distance: number): RoofPoint[] {
+  if (distance <= 0 || footprint.length < 3) return footprint.map((point) => ({ ...point }));
+  const ccw = signedPolygonArea(footprint) > 0;
+  return footprint.map((point, index) => {
+    const previous = footprint[(index - 1 + footprint.length) % footprint.length];
+    const next = footprint[(index + 1) % footprint.length];
+    if (!previous || !next) return { ...point };
+    const previousDirection = { x: point.x - previous.x, y: point.y - previous.y };
+    const nextDirection = { x: next.x - point.x, y: next.y - point.y };
+    const previousLength = Math.hypot(previousDirection.x, previousDirection.y) || 1;
+    const nextLength = Math.hypot(nextDirection.x, nextDirection.y) || 1;
+    previousDirection.x /= previousLength;
+    previousDirection.y /= previousLength;
+    nextDirection.x /= nextLength;
+    nextDirection.y /= nextLength;
+    const outward = (direction: RoofPoint) =>
+      ccw ? { x: direction.y, y: -direction.x } : { x: -direction.y, y: direction.x };
+    const previousNormal = outward(previousDirection);
+    const nextNormal = outward(nextDirection);
+    const intersection = lineIntersection(
+      {
+        x: point.x + previousNormal.x * distance,
+        y: point.y + previousNormal.y * distance,
+      },
+      previousDirection,
+      { x: point.x + nextNormal.x * distance, y: point.y + nextNormal.y * distance },
+      nextDirection,
+    );
+    if (
+      intersection &&
+      Math.hypot(intersection.x - point.x, intersection.y - point.y) < distance * 6
+    ) {
+      return intersection;
+    }
+    const average = {
+      x: previousNormal.x + nextNormal.x,
+      y: previousNormal.y + nextNormal.y,
+    };
+    const averageLength = Math.hypot(average.x, average.y) || 1;
+    return {
+      x: point.x + (average.x / averageLength) * distance,
+      y: point.y + (average.y / averageLength) * distance,
+    };
+  });
+}
+
+function refineRoofTriangle(
+  a: RoofPoint,
+  b: RoofPoint,
+  c: RoofPoint,
+  output: Array<[RoofPoint, RoofPoint, RoofPoint]>,
+  depth = 0,
+): void {
+  const edges = [
+    { length: Math.hypot(b.x - a.x, b.y - a.y), start: a, end: b, other: c },
+    { length: Math.hypot(c.x - b.x, c.y - b.y), start: b, end: c, other: a },
+    { length: Math.hypot(a.x - c.x, a.y - c.y), start: c, end: a, other: b },
+  ].sort((left, right) => right.length - left.length);
+  const edge = edges[0];
+  if (!edge || edge.length <= 400 || depth >= 7) {
+    output.push([a, b, c]);
+    return;
+  }
+  const midpoint = { x: (edge.start.x + edge.end.x) / 2, y: (edge.start.y + edge.end.y) / 2 };
+  refineRoofTriangle(edge.start, midpoint, edge.other, output, depth + 1);
+  refineRoofTriangle(midpoint, edge.end, edge.other, output, depth + 1);
+}
+
 function addRoof(group: THREE.Group, building: BuildingDefinition): void {
   const roof = building.roof;
   const roofFloor = building.floors.find((floor) => floor.id === roof?.floorId);
   if (!roof || !roofFloor) return;
-  const xs = building.footprint.map((point) => point.x);
-  const ys = building.footprint.map((point) => point.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const ridgeAlongX = Math.abs(roof.ridgeRotationDegrees % 180) < 45;
-  const run = (ridgeAlongX ? maxY - minY : maxX - minX) / 2;
-  const rise = Math.tan((roof.pitchDegrees * Math.PI) / 180) * run;
+  const layout = deriveAutomaticRoofLayout(building.footprint);
+  const footprint = offsetFootprint(building.footprint, Math.max(0, roof.overhang));
+  const vectors = footprint.map((point) => new THREE.Vector2(point.x, point.y));
+  const triangles = THREE.ShapeUtils.triangulateShape(vectors, []);
+  const refined: Array<[RoofPoint, RoofPoint, RoofPoint]> = [];
+  for (const triangle of triangles) {
+    const a = footprint[triangle[0] ?? 0];
+    const b = footprint[triangle[1] ?? 0];
+    const c = footprint[triangle[2] ?? 0];
+    if (a && b && c) refineRoofTriangle(a, b, c, refined);
+  }
   const baseZ = roofFloor.elevation;
-  const centroid = building.footprint.reduce(
-    (sum, point) => ({
-      x: sum.x + point.x / building.footprint.length,
-      y: sum.y + point.y / building.footprint.length,
-    }),
-    { x: 0, y: 0 },
-  );
-  const expand = Math.max(0, roof.overhang);
-  const footprint = building.footprint.map((point) => {
-    const dx = point.x - centroid.x;
-    const dy = point.y - centroid.y;
-    const length = Math.hypot(dx, dy) || 1;
-    return { x: point.x + (dx / length) * expand, y: point.y + (dy / length) * expand };
-  });
-  const shape = new THREE.Shape(
-    footprint.map((point) => new THREE.Vector2(point.x * MM_TO_M, point.y * MM_TO_M)),
-  );
-  const triangles = THREE.ShapeUtils.triangulateShape(shape.getPoints(), []);
-  const topHeight = (point: { x: number; y: number }) => {
-    const distanceFromRidge = ridgeAlongX
-      ? Math.abs(point.y - (minY + maxY) / 2)
-      : Math.abs(point.x - (minX + maxX) / 2);
-    return (
-      baseZ + Math.max(0, rise - Math.tan((roof.pitchDegrees * Math.PI) / 180) * distanceFromRidge)
-    );
+  const slope = Math.tan((roof.pitchDegrees * Math.PI) / 180);
+  const topHeight = (point: RoofPoint) => {
+    const local = localPoint(point, layout);
+    let height = baseZ + roof.thickness;
+    for (const module of layout.modules) {
+      const minU = module.minU - roof.overhang;
+      const maxU = module.maxU + roof.overhang;
+      const minV = module.minV - roof.overhang;
+      const maxV = module.maxV + roof.overhang;
+      if (local.x < minU - 1 || local.x > maxU + 1 || local.y < minV - 1 || local.y > maxV + 1)
+        continue;
+      const run =
+        module.ridgeAxis === "u"
+          ? Math.min(local.y - minV, maxV - local.y)
+          : Math.min(local.x - minU, maxU - local.x);
+      height = Math.max(height, baseZ + roof.thickness + Math.max(0, run) * slope);
+    }
+    return height;
   };
   const positions: number[] = [];
-  const indices: number[] = [];
-  for (const point of footprint) {
-    positions.push(point.x * MM_TO_M, point.y * MM_TO_M, topHeight(point) * MM_TO_M);
-  }
-  for (const point of footprint) {
-    positions.push(point.x * MM_TO_M, point.y * MM_TO_M, (baseZ - roof.thickness) * MM_TO_M);
-  }
-  const count = footprint.length;
-  for (const triangle of triangles) {
-    indices.push(triangle[0] ?? 0, triangle[1] ?? 0, triangle[2] ?? 0);
-    indices.push(
-      (triangle[2] ?? 0) + count,
-      (triangle[1] ?? 0) + count,
-      (triangle[0] ?? 0) + count,
-    );
-  }
-  for (let index = 0; index < count; index += 1) {
-    const next = (index + 1) % count;
-    indices.push(index, next, index + count, next, next + count, index + count);
+  const pushTriangle = (
+    a: RoofPoint,
+    b: RoofPoint,
+    c: RoofPoint,
+    z: (point: RoofPoint) => number,
+  ) => {
+    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const ordered = cross >= 0 ? [a, b, c] : [a, c, b];
+    for (const point of ordered)
+      positions.push(point.x * MM_TO_M, point.y * MM_TO_M, z(point) * MM_TO_M);
+  };
+  refined.forEach(([a, b, c]) => {
+    pushTriangle(a, b, c, topHeight);
+  });
+  triangles.forEach((triangle) => {
+    const a = footprint[triangle[0] ?? 0];
+    const b = footprint[triangle[1] ?? 0];
+    const c = footprint[triangle[2] ?? 0];
+    if (a && b && c) pushTriangle(a, c, b, () => baseZ);
+  });
+  const ccw = signedPolygonArea(footprint) > 0;
+  for (let index = 0; index < footprint.length; index += 1) {
+    const start = footprint[index];
+    const end = footprint[(index + 1) % footprint.length];
+    if (!start || !end) continue;
+    const steps = Math.max(1, Math.ceil(Math.hypot(end.x - start.x, end.y - start.y) / 400));
+    for (let step = 0; step < steps; step += 1) {
+      const at = (amount: number) => ({
+        x: start.x + (end.x - start.x) * amount,
+        y: start.y + (end.y - start.y) * amount,
+      });
+      const a = at(step / steps);
+      const b = at((step + 1) / steps);
+      const vertices = ccw ? [a, b] : [b, a];
+      const first = vertices[0];
+      const second = vertices[1];
+      if (!first || !second) continue;
+      positions.push(
+        first.x * MM_TO_M,
+        first.y * MM_TO_M,
+        baseZ * MM_TO_M,
+        second.x * MM_TO_M,
+        second.y * MM_TO_M,
+        baseZ * MM_TO_M,
+        second.x * MM_TO_M,
+        second.y * MM_TO_M,
+        topHeight(second) * MM_TO_M,
+        first.x * MM_TO_M,
+        first.y * MM_TO_M,
+        baseZ * MM_TO_M,
+        second.x * MM_TO_M,
+        second.y * MM_TO_M,
+        topHeight(second) * MM_TO_M,
+        first.x * MM_TO_M,
+        first.y * MM_TO_M,
+        topHeight(first) * MM_TO_M,
+      );
+    }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
   geometry.computeVertexNormals();
   const mesh = new THREE.Mesh(geometry, materials.roof);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.userData = { entityType: "roof", entityId: roof.floorId };
+  mesh.userData = {
+    entityType: "roof",
+    entityId: roof.floorId,
+    roofModuleCount: layout.modules.length,
+    ridgeDirection: layout.axisU,
+  };
   group.add(mesh);
 }
 
@@ -666,8 +1007,11 @@ export function createTerrainMesh(layer: TerrainLayer, imageryBase64?: string): 
     positions.needsUpdate = true;
     geometry.computeVertexNormals();
   }
+  const imageryMediaType = layer.imageryArchivePath?.toLowerCase().endsWith(".jpg")
+    ? "image/jpeg"
+    : "image/png";
   const terrainTexture = imageryBase64
-    ? new THREE.TextureLoader().load(`data:image/png;base64,${imageryBase64}`)
+    ? new THREE.TextureLoader().load(`data:${imageryMediaType};base64,${imageryBase64}`)
     : undefined;
   if (terrainTexture) terrainTexture.colorSpace = THREE.SRGBColorSpace;
   const terrainMaterial = terrainTexture
