@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatArea, polygonAreaMm2 } from "../../../shared/geometry";
-import { type EditorTool, useEditorStore } from "../store";
+import { type EditorTool, editorToolLabel, useEditorStore } from "../store";
 import { SceneCanvas } from "../three/SceneCanvas";
 import { exportSceneToGlb } from "../three/sceneBridge";
 import { Inspector } from "./Inspector";
@@ -238,9 +238,14 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
             {activeBuilding && (
               <>
                 {action("Select", "S", () => setTool("select"), { active: tool === "select" })}
-                {action("Wall", "W", () => setTool("wall"), { active: tool === "wall" })}
+                {action("Outer wall", "O", () => setTool("external-wall"), {
+                  active: tool === "external-wall",
+                })}
+                {action("Inner wall", "I", () => setTool("internal-wall"), {
+                  active: tool === "internal-wall",
+                })}
                 {action("Door", "D", () => setTool("door"), { active: tool === "door" })}
-                {action("Window", "O", () => setTool("window"), {
+                {action("Window", "W", () => setTool("window"), {
                   active: tool === "window",
                 })}
                 {action("Carport", "C", () => setTool("carport"), {
@@ -250,7 +255,7 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
                 {action("Add roof", "R", addRoof, {
                   disabled: Boolean(activeBuilding.roof),
                 })}
-                {tool === "wall" && (
+                {(tool === "external-wall" || tool === "internal-wall") && (
                   <div className="toolbar-angle-status">
                     <span>Wall angle</span>
                     <strong>{draft.axisAngle}°</strong>
@@ -464,7 +469,8 @@ export function EditorShell({ onSettings }: Props) {
               ) : (
                 <>
                   <ToolButton tool="select" label="Select" />
-                  <ToolButton tool="wall" label="Wall" hint="Click start + end" />
+                  <ToolButton tool="external-wall" label="Outer wall" hint="250 mm · inside" />
+                  <ToolButton tool="internal-wall" label="Inner wall" hint="100 mm · centred" />
                   <ToolButton tool="door" label="Door" hint="900 × 2100" />
                   <ToolButton tool="window" label="Window" hint="1200 × 1200" />
                   <ToolButton tool="carport" label="Carport" hint="3000 mm garage opening" />
@@ -592,7 +598,7 @@ export function EditorShell({ onSettings }: Props) {
         <span>{status}</span>
         {(mode === "builder" || tool === "polygon") && (
           <>
-            <span>{tool}</span>
+            <span>{editorToolLabel(tool)}</span>
             <span>{displayedPoints.length} points</span>
             <span>{formatArea(polygonAreaMm2(displayedPoints), settings?.areaFormat ?? "m2")}</span>
             <span>Units: mm</span>

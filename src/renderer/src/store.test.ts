@@ -101,4 +101,36 @@ describe("scene clipboard", () => {
       transform: { position: { x: 500, y: 500, z: 0 } },
     });
   });
+
+  it("creates the explicitly selected wall element without footprint classification", () => {
+    const project = createProject("Explicit walls");
+    const building = createBuilding("House", [
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 5000, y: 4000 },
+      { x: 0, y: 4000 },
+    ]);
+    const floor = building.floors[0];
+    if (!floor) throw new Error("Expected a ground floor.");
+    project.buildingDefinitions.push(building);
+    useEditorStore.setState({
+      project,
+      activeBuildingId: building.id,
+      activeFloorId: floor.id,
+      tool: "internal-wall",
+      draft: { points: [], axisAngle: 0, numericInput: "" },
+      dirty: false,
+      past: [],
+      future: [],
+    });
+
+    useEditorStore.getState().addWallSegment({ x: 0, y: 0 }, { x: 5000, y: 0 });
+    useEditorStore.getState().setTool("external-wall");
+    useEditorStore.getState().addWallSegment({ x: 1000, y: 1000 }, { x: 4000, y: 1000 });
+
+    expect(useEditorStore.getState().project?.buildingDefinitions[0]?.walls).toMatchObject([
+      { type: "internal", thickness: 100, alignment: "center" },
+      { type: "external", thickness: 250, alignment: "inside" },
+    ]);
+  });
 });

@@ -50,7 +50,6 @@ function buildingFor(footprint: Vec2[]): BuildingDefinition {
         start: footprint[0] ?? { x: 0, y: 0 },
         end: footprint[1] ?? { x: 5000, y: 0 },
         type: "external",
-        typeSource: "auto",
         thickness: 250,
         alignment: "inside",
       },

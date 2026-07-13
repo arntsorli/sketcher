@@ -4,7 +4,6 @@ import {
   calculateStair,
   formatArea,
   gablePanelRotation,
-  isWallOnFootprint,
   lockToConstructionAxis,
   polygonAreaMm2,
   polygonPerimeterMm,
@@ -73,9 +72,7 @@ describe("building geometry", () => {
     expect(snapToGrid({ x: 1049, y: -151 }, 100)).toEqual({ x: 1000, y: -200 });
   });
 
-  it("classifies footprint walls and stair risers", () => {
-    expect(isWallOnFootprint({ x: 0, y: 0 }, { x: 5000, y: 0 }, rectangle)).toBe(true);
-    expect(isWallOnFootprint({ x: 1000, y: 1000 }, { x: 4000, y: 1000 }, rectangle)).toBe(false);
+  it("calculates stair risers", () => {
     expect(calculateStair(2700)).toEqual({ riserCount: 15, riserHeight: 180 });
   });
 
@@ -94,7 +91,6 @@ describe("building geometry", () => {
       start: { x: 0, y: 0 },
       end: { x: 5000, y: 0 },
       type: "external" as const,
-      typeSource: "auto" as const,
       thickness: 250,
       alignment: "inside" as const,
     };

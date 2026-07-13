@@ -17,7 +17,7 @@ import {
   snapToGrid,
 } from "../../../shared/geometry";
 import type { ProjectDocument, Vec2, Wall } from "../../../shared/model";
-import { useEditorStore } from "../store";
+import { isWallTool, useEditorStore } from "../store";
 import { buildWallSolid } from "../workers/geometryClient";
 import type { WallSolidRequest } from "../workers/geometryTypes";
 import { clippingHandlePosition, clippingOffsetFromHandle, createClippingPlane } from "./clipping";
@@ -953,9 +953,10 @@ export function SceneCanvas() {
         current.draft.points,
         builderSnapRadiusMm(engine, rect.width, current.project?.settings.snapTolerance ?? 12),
       );
-      const origin =
-        current.tool === "wall" ? current.draft.wallStart : current.draft.points.at(-1);
-      if (current.mode === "builder" && current.tool === "wall" && origin) {
+      const origin = isWallTool(current.tool)
+        ? current.draft.wallStart
+        : current.draft.points.at(-1);
+      if (current.mode === "builder" && isWallTool(current.tool) && origin) {
         return lockToConstructionAxis(origin, aggressiveSnap ?? rawPoint, current.draft.axisAngle);
       }
       if (aggressiveSnap) return aggressiveSnap;
@@ -971,7 +972,8 @@ export function SceneCanvas() {
       if (
         point &&
         ((mode === "builder" &&
-          ["foundation", "wall", "door", "window", "carport", "stair"].includes(tool)) ||
+          (isWallTool(tool) ||
+            ["foundation", "door", "window", "carport", "stair"].includes(tool))) ||
           (mode === "architecture" && ["place-building", "place-asset", "polygon"].includes(tool)))
       ) {
         setDraft({ hover: point });
@@ -985,7 +987,7 @@ export function SceneCanvas() {
       if (!point) return;
       if (mode === "builder") {
         if (tool === "foundation") addFoundationPoint(point);
-        else if (tool === "wall") {
+        else if (isWallTool(tool)) {
           if (draft.wallStart) addWallSegment(draft.wallStart, point);
           else setDraft({ wallStart: point });
         } else if (tool === "door" || tool === "window" || tool === "carport") {
@@ -1025,13 +1027,14 @@ export function SceneCanvas() {
     };
 
     const onWheel = (event: WheelEvent) => {
-      if (mode !== "builder" || !event.ctrlKey || !["foundation", "wall"].includes(tool)) return;
+      if (mode !== "builder" || !event.ctrlKey || (tool !== "foundation" && !isWallTool(tool)))
+        return;
       event.preventDefault();
       const state = useEditorStore.getState();
       const increment = state.project?.settings.angleIncrement ?? 5;
       const next = state.draft.axisAngle + (event.deltaY > 0 ? increment : -increment);
       const axisAngle = ((next % 180) + 180) % 180;
-      const origin = state.tool === "wall" ? state.draft.wallStart : state.draft.points.at(-1);
+      const origin = isWallTool(state.tool) ? state.draft.wallStart : state.draft.points.at(-1);
       const rawHover = rawPointerRef.current ?? state.draft.hover;
       state.setDraft({
         axisAngle,
@@ -1116,12 +1119,13 @@ export function SceneCanvas() {
         }
         return;
       }
-      if (state.mode !== "builder" || !["foundation", "wall"].includes(state.tool)) return;
+      if (state.mode !== "builder" || (state.tool !== "foundation" && !isWallTool(state.tool)))
+        return;
       const target = event.target;
       if (target instanceof HTMLInputElement && target !== inputRef.current) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        if (state.tool === "wall" && state.draft.wallStart) {
+        if (isWallTool(state.tool) && state.draft.wallStart) {
           state.setDraft({ wallStart: undefined, numericInput: "", hover: undefined });
           state.setStatus("Wall segment cancelled");
         } else {
@@ -1137,7 +1141,7 @@ export function SceneCanvas() {
         } else if (state.tool === "foundation" && state.draft.points.length > 0) {
           event.preventDefault();
           state.removeLastFoundationPoint();
-        } else if (state.tool === "wall" && state.draft.wallStart) {
+        } else if (isWallTool(state.tool) && state.draft.wallStart) {
           event.preventDefault();
           state.setDraft({ wallStart: undefined, hover: undefined });
         }
@@ -1155,8 +1159,9 @@ export function SceneCanvas() {
         state.finishFoundation();
         return;
       }
-      const hasOrigin =
-        state.tool === "wall" ? state.draft.wallStart : state.draft.points.length > 0;
+      const hasOrigin = isWallTool(state.tool)
+        ? state.draft.wallStart
+        : state.draft.points.length > 0;
       if (!hasOrigin) return;
       if (/^[0-9.,]$/.test(event.key)) {
         event.preventDefault();
@@ -1270,12 +1275,12 @@ export function SceneCanvas() {
   const commitNumeric = () => {
     const state = useEditorStore.getState();
     const length = Number.parseFloat(state.draft.numericInput);
-    const origin = state.tool === "wall" ? state.draft.wallStart : state.draft.points.at(-1);
+    const origin = isWallTool(state.tool) ? state.draft.wallStart : state.draft.points.at(-1);
     const toward = state.draft.hover;
     if (!origin || !toward || !Number.isFinite(length) || length <= 0) return;
     const point = pointAtLength(origin, toward, length);
     if (state.tool === "foundation") state.addFoundationPoint(point);
-    else if (state.tool === "wall") state.addWallSegment(origin, point);
+    else if (isWallTool(state.tool)) state.addWallSegment(origin, point);
     state.setDraft({ numericInput: "" });
   };
 
@@ -1285,6 +1290,9 @@ export function SceneCanvas() {
     <div
       className="scene-host"
       data-axis-angle={draft.axisAngle}
+      data-wall-element={
+        tool === "external-wall" ? "outer" : tool === "internal-wall" ? "inner" : "none"
+      }
       data-transform-mode={transformMode}
       data-view={mode === "builder" ? "top-locked" : "perspective"}
       ref={hostRef}
@@ -1322,7 +1330,7 @@ export function SceneCanvas() {
           );
         })}
       </svg>
-      {mode === "builder" && draft.hover && (tool === "foundation" || tool === "wall") && (
+      {mode === "builder" && draft.hover && (tool === "foundation" || isWallTool(tool)) && (
         <div
           className="angle-offset-label"
           style={{
@@ -1330,6 +1338,7 @@ export function SceneCanvas() {
             top: inputPosition.y,
           }}
         >
+          {isWallTool(tool) && (tool === "external-wall" ? "Outer wall · " : "Inner wall · ")}
           {draft.axisAngle === 0 ? "Right angle · 0°" : `Axis offset · ${draft.axisAngle}°`}
         </div>
       )}
@@ -1341,10 +1350,10 @@ export function SceneCanvas() {
           style={{ left: inputPosition.x, top: inputPosition.y }}
           value={
             draft.numericInput ||
-            (draft.hover && (tool === "wall" ? draft.wallStart : lastDraftPoint)
+            (draft.hover && (isWallTool(tool) ? draft.wallStart : lastDraftPoint)
               ? Math.round(
                   distance(
-                    tool === "wall"
+                    isWallTool(tool)
                       ? (draft.wallStart ?? draft.hover)
                       : (lastDraftPoint ?? draft.hover),
                     draft.hover,

@@ -79,12 +79,12 @@ function BuilderInspector({
         <summary>Building properties</summary>
         <div className="field-row">
           <label>
-            External wall
+            Outer wall
             <input
               type="number"
               defaultValue={building.defaults.externalWallThickness}
               onBlur={(event) =>
-                commit("External wall default changed", (document) => {
+                commit("Outer wall default changed", (document) => {
                   const target = document.buildingDefinitions.find(
                     (item) => item.id === building.id,
                   );
@@ -98,12 +98,12 @@ function BuilderInspector({
             />
           </label>
           <label>
-            Internal wall
+            Inner wall
             <input
               type="number"
               defaultValue={building.defaults.internalWallThickness}
               onBlur={(event) =>
-                commit("Internal wall default changed", (document) => {
+                commit("Inner wall default changed", (document) => {
                   const target = document.buildingDefinitions.find(
                     (item) => item.id === building.id,
                   );
@@ -446,10 +446,8 @@ function BuilderInspector({
               >
                 <span>W{index + 1}</span>
                 <div>
-                  <strong>{item.type === "external" ? "External wall" : "Internal wall"}</strong>
-                  <small>
-                    {item.thickness} mm · {item.typeSource}
-                  </small>
+                  <strong>{item.type === "external" ? "Outer wall" : "Inner wall"}</strong>
+                  <small>{item.thickness} mm</small>
                 </div>
               </button>
             ))}
@@ -457,17 +455,16 @@ function BuilderInspector({
         {wall && (
           <div className="property-card">
             <label>
-              Wall type
+              Wall element
               <select
                 value={wall.type}
                 onChange={(event) =>
-                  commit("Wall type overridden", (document) => {
+                  commit("Wall element changed", (document) => {
                     const target = document.buildingDefinitions
                       .find((item) => item.id === building.id)
                       ?.walls.find((item) => item.id === wall.id);
                     if (!target) return;
                     target.type = event.target.value as "external" | "internal";
-                    target.typeSource = "manual";
                     target.thickness =
                       target.type === "external"
                         ? building.defaults.externalWallThickness
@@ -476,8 +473,8 @@ function BuilderInspector({
                   })
                 }
               >
-                <option value="external">External</option>
-                <option value="internal">Internal</option>
+                <option value="external">Outer wall</option>
+                <option value="internal">Inner wall</option>
               </select>
             </label>
             <div className="field-row">
@@ -493,7 +490,6 @@ function BuilderInspector({
                         ?.walls.find((item) => item.id === wall.id);
                       if (!target) return;
                       target.thickness = numberOnBlur(event.target.value, wall.thickness);
-                      target.typeSource = "manual";
                     })
                   }
                 />

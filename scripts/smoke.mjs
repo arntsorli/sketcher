@@ -66,6 +66,7 @@ try {
   await window.locator('.scene-host[data-view="top-locked"]').waitFor({ state: "visible" });
   await window.getByText("Locked top view").waitFor({ state: "visible" });
   const canvas = window.locator(".scene-host canvas");
+  const modellingToolbar = window.getByRole("toolbar", { name: "3D modelling tools" });
   const bounds = await canvas.boundingBox();
   if (!bounds) throw new Error("3D canvas has no visible bounds.");
   await canvas.click({ position: { x: bounds.width * 0.46, y: bounds.height * 0.58 } });
@@ -93,13 +94,14 @@ try {
   }
   await window.getByRole("button", { name: "Close foundation" }).click();
   await window.getByText("Building properties").waitFor({ state: "visible" });
-  await window.getByRole("button", { name: /Wall/ }).click();
+  await modellingToolbar.getByRole("button", { name: "Outer wall", exact: true }).click();
+  await window.locator('.scene-host[data-wall-element="outer"]').waitFor({ state: "visible" });
   await window.mouse.move(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.55);
   await window.keyboard.down("Control");
   await window.mouse.wheel(0, 100);
   await window.keyboard.up("Control");
   await window.locator('.scene-host[data-axis-angle="5"]').waitFor({ state: "visible" });
-  await window.getByText("Axis offset · 5°").waitFor({ state: "visible" });
+  await window.getByText("Outer wall · Axis offset · 5°").waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "wall-angle-offset.png") });
   await window.keyboard.down("Control");
   await window.mouse.wheel(0, -100);
@@ -113,6 +115,11 @@ try {
   if (rendererMessages.some((message) => message.includes("Manifold wall generation failed"))) {
     throw new Error("Manifold worker fell back during the smoke journey.");
   }
+  await modellingToolbar.getByRole("button", { name: "Inner wall", exact: true }).click();
+  await window.locator('.scene-host[data-wall-element="inner"]').waitFor({ state: "visible" });
+  await canvas.click({ position: { x: bounds.width * 0.49, y: bounds.height * 0.6 } });
+  await canvas.click({ position: { x: bounds.width * 0.49, y: bounds.height * 0.56 } });
+  await window.getByText("Walls · 2").waitFor({ state: "visible" });
   await window.getByRole("button", { name: /Door/ }).click();
   await window.mouse.move(bounds.x + bounds.width * 0.51, bounds.y + bounds.height * 0.64);
   await window

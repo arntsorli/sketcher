@@ -15,7 +15,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-007 | Three.js viewport, navigation, selection, transforms | In progress | SK-006 | Transform/rebuild and large-coordinate tests |
 | SK-008 | Foundation drawing and dimensions | Done for v0.1.4 | SK-007 | Unit, smoke, and direct-input persistence E2E |
 | SK-009 | Floors and wall modelling | In progress | SK-008 | Snap/alignment and dependency tests |
-| SK-010 | Openings, stairs, and gable roof | In progress | SK-009 | Geometry golden tests |
+| SK-010 | Openings, stairs, and automatic pitched roof | In progress | SK-009 | Geometry golden tests |
 | SK-011 | Geometry worker and Manifold integration | In progress | SK-010 | All-solid coverage, cancellation, golden tests |
 | SK-012 | Building library and shared instances | In progress | SK-009 | Shared/unique propagation automation |
 | SK-013 | Scene objects and GLB interchange | In progress | SK-007 | Textured GLB round-trip fixtures |
@@ -43,6 +43,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-035 | Reliable high-resolution satellite capture | Done for v0.1.4 | SK-025 | JPEG capture retry unit and live-provider smoke |
 | SK-036 | Footprint-aware automatic pitched roof | Done for v0.1.4 | SK-010, SK-024 | L-shape, rotated, and irregular-footprint geometry tests |
 | SK-037 | Builder feedback and compact section controls | Done for v0.1.4 | SK-021, SK-027, SK-034 | Immediate-angle, contrast, carport, and clipping-handle smoke/tests |
+| SK-038 | Explicit outer and inner wall elements | Done for v0.1.4 | SK-009, SK-034 | Store regression and two-tool desktop smoke |
 
 ## Ticket details
 
@@ -177,7 +178,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Implemented**
 
-- Grid and construction-axis snapping, closure snapping, 5° Ctrl+wheel offset, provisional geometry, direct numeric input, validation, area, perimeter, and automatic transition to wall work.
+- Grid and construction-axis snapping, closure snapping, 5° Ctrl+wheel offset, provisional geometry, direct numeric input, validation, area, perimeter, and transition to the Outer Wall tool.
 - Builder uses a locked orthographic top view with no camera rotation; nearby vertices and edges take priority over axes and grid using an aggressive screen-scaled snap radius.
 - Projected SVG dimension lines, end stops, aligned millimetre labels, and Builder-only display.
 - Self-intersection, zero-length, too-few-points, and zero-area checks. Crossing and duplicate edges are rejected before entering the draft; Backspace and the visible Undo last point action recover individual vertices without discarding the polygon.
@@ -200,15 +201,14 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Implemented**
 
-- Default external/internal thickness, floor height, slab thickness, active-floor panel, floor addition, and recalculated elevations.
-- Wall drawing, automatic footprint classification, manual type/thickness/alignment overrides, per-floor wall lists, and generated wall solids.
+- Default outer/inner thickness, floor height, slab thickness, active-floor panel, floor addition, and recalculated elevations.
+- Separate Outer Wall and Inner Wall drawing tools, explicit element conversion, per-type thickness/alignment defaults, per-floor wall lists, and generated wall solids.
 
 **Todo / hardening**
 
 - Snap walls to existing endpoints, corners, and edges with visible snap markers.
 - Implement floor reorder and dependency-aware floor deletion dialog.
-- Automatic exterior walls now align their outer face to the footprint boundary for either winding; add explicit visual tests for manual inside/centre/outside overrides.
-- Recompute only auto-classified walls after footprint edits.
+- Outer walls align their outer face to the footprint boundary for either winding when drawn along it; add explicit visual tests for inside/centre/outside overrides.
 
 ### SK-010 — Openings, stairs, and automatic pitched roof
 
@@ -438,7 +438,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **In progress**
 
-- Corrected automatic external-wall alignment for both clockwise and counter-clockwise footprints so the wall solid grows toward the interior.
+- Corrected outer-wall alignment for both clockwise and counter-clockwise footprints so an inside-aligned wall solid grows toward the interior.
 - Roof elevation starts at the final wall top. The closed, triangulated roof volume includes fascia/gable infill and no longer leaves daylight between the final storey and roof.
 - The generator derives its main axis from the longest footprint edge, decomposes orthogonal concave plans into a primary roof and smaller merged cross-roofs, and uses a stable longest-direction fallback for irregular angled plans.
 - A line-intersection offset preserves the specified overhang around the real footprint instead of expanding a global bounding box.
@@ -495,9 +495,9 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Todo**
 
-- Exterior wall pairs with one shared endpoint now derive matching inside/outside miter cuts from their actual directions and thicknesses, including non-orthogonal corners.
+- Outer-wall pairs with one shared endpoint now derive matching inside/outside miter cuts from their actual directions and thicknesses, including non-orthogonal corners.
 - Mitered walls use an extruded fallback profile so the visible join is clean while standard unjoined walls retain the Manifold path.
-- T-junctions, multiple walls at one endpoint, internal-wall joins, and Manifold/export parity remain to be implemented.
+- T-junctions, multiple walls at one endpoint, inner-wall joins, and Manifold/export parity remain to be implemented.
 - Preserve manual wall alignment/type overrides and provide a validation message for degenerate or unresolved junctions.
 - Geometry tests cover 90° and angled exterior corners; add golden bounds/volume tests for acute, obtuse, T, and mixed-thickness cases.
 
@@ -591,17 +591,30 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 **Done for v0.1.4**
 
 - Foundation, wall, snap, opening, and dimension helper colours adapt to the configured background; light canvases use a darker blue/green palette with stronger contrast.
-- Foundation and Wall tools show a cursor-adjacent `Right angle · 0°` or `Axis offset · N°` label. Ctrl+wheel updates both the label and provisional snapped segment immediately, without waiting for pointer movement.
+- Foundation and both wall tools show a cursor-adjacent `Right angle · 0°` or `Axis offset · N°` label. Wall labels also identify the active Outer or Inner element. Ctrl+wheel updates both the label and provisional snapped segment immediately, without waiting for pointer movement.
 - Clipping uses a small in-scene axis handle and a compact popover containing only enable, axis, flip, reset, and the live offset readout.
 - Carport openings expose one default preset plus direct width/height overrides, keeping the normal workflow simple without preventing custom openings.
 - Unit/component coverage verifies clipping-handle conversion and carport overrides; the desktop smoke verifies immediate angle feedback and section-handle presence.
+
+### SK-038 - Explicit outer and inner wall elements
+
+**Outcome:** Wall intent is chosen before drawing and never depends on an imperfect foundation-edge classification heuristic.
+
+**Done for v0.1.4**
+
+- Replaced the generic Wall tool with distinct Outer Wall and Inner Wall actions in both Builder tool surfaces.
+- Closing a foundation selects Outer Wall by default. Outer walls use the building's outer thickness and inside alignment; inner walls use the inner thickness and centre alignment.
+- Removed endpoint-on-footprint classification and the obsolete automatic/manual source flag from the authoritative wall schema and Inspector.
+- Existing projects keep their persisted wall type, thickness, and alignment. Legacy `typeSource` fields are accepted and stripped during normal schema parsing.
+- The selected-wall Inspector provides an explicit Wall element selector for intentional conversion between Outer and Inner, updating defaults predictably.
+- Store regression coverage proves an Inner Wall remains inner even when drawn exactly on the footprint and an Outer Wall remains outer away from it. Desktop smoke draws both elements and verifies their active canvas state.
 
 ## Release acceptance checklist
 
 - [x] Packaged Windows application launches and reports the package version.
 - [ ] Fresh-machine install/uninstall and full Home create/open/save/recover/Save As/delete journey pass.
 - [x] Geometry tests confirm a 5000×8000 mm foundation reports 40.00 m² and 26,000 mm perimeter; direct-input creation is smoke tested.
-- [ ] External/internal walls, a door, a window, second floor, straight stair opening, and gable roof persist after restart.
+- [ ] Outer/inner walls, a door, a window, second floor, straight stair opening, and automatic roof persist after restart.
 - [ ] Two shared building instances update together; Make Unique detaches one.
 - [ ] Procedural and imported objects select, focus, transform, persist, and export.
 - [ ] A selected live map polygon imports as a cached Z=0 surface; offline restart verification remains open.

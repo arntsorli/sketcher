@@ -252,45 +252,24 @@ export function pointAtLength(origin: Vec2, toward: Vec2, lengthMm: number): Vec
   };
 }
 
-export function isWallOnFootprint(
-  start: Vec2,
-  end: Vec2,
-  footprint: Vec2[],
-  tolerance = 5,
-): boolean {
-  for (let index = 0; index < footprint.length; index += 1) {
-    const edgeStart = footprint[index];
-    const edgeEnd = footprint[(index + 1) % footprint.length];
-    if (
-      edgeStart &&
-      edgeEnd &&
-      pointOnSegment(start, edgeStart, edgeEnd, tolerance) &&
-      pointOnSegment(end, edgeStart, edgeEnd, tolerance)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function createWall(
   building: BuildingDefinition,
   floorId: string,
   start: Vec2,
   end: Vec2,
+  type: Wall["type"],
 ): Wall {
-  const external = isWallOnFootprint(start, end, building.footprint);
   return {
     id: crypto.randomUUID(),
     floorId,
     start,
     end,
-    type: external ? "external" : "internal",
-    typeSource: "auto",
-    thickness: external
-      ? building.defaults.externalWallThickness
-      : building.defaults.internalWallThickness,
-    alignment: external ? "inside" : "center",
+    type,
+    thickness:
+      type === "external"
+        ? building.defaults.externalWallThickness
+        : building.defaults.internalWallThickness,
+    alignment: type === "external" ? "inside" : "center",
   };
 }
 

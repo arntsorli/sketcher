@@ -35,7 +35,8 @@ type SceneClipboard =
 export type EditorTool =
   | "select"
   | "foundation"
-  | "wall"
+  | "external-wall"
+  | "internal-wall"
   | "door"
   | "window"
   | "carport"
@@ -45,6 +46,18 @@ export type EditorTool =
   | "place-building"
   | "place-asset"
   | "terrain";
+
+export type WallEditorTool = Extract<EditorTool, "external-wall" | "internal-wall">;
+
+export function isWallTool(tool: EditorTool): tool is WallEditorTool {
+  return tool === "external-wall" || tool === "internal-wall";
+}
+
+export function editorToolLabel(tool: EditorTool): string {
+  if (tool === "external-wall") return "Outer wall";
+  if (tool === "internal-wall") return "Inner wall";
+  return tool.replaceAll("-", " ");
+}
 
 export type Selection =
   | { type: "building"; id: string }
@@ -331,10 +344,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       placementAssetId: undefined,
       draft: {
         points: [],
-        axisAngle: tool === "wall" ? 0 : get().draft.axisAngle,
+        axisAngle: isWallTool(tool) ? 0 : get().draft.axisAngle,
         numericInput: "",
       },
-      status: `${tool.replace("-", " ")} tool`,
+      status: `${editorToolLabel(tool)} tool`,
       error: undefined,
     });
   },
@@ -519,7 +532,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({
       activeBuildingId: building.id,
       activeFloorId: building.floors[0]?.id,
-      tool: "wall",
+      tool: "external-wall",
       draft: { points: [], axisAngle: state.draft.axisAngle, numericInput: "" },
     });
   },
@@ -626,8 +639,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     const building = selectedBuildingDefinition(state);
     const floorId = activeFloorId(state);
-    if (!building || !floorId || distance(start, end) < 1) return;
-    const wall = createWall(building, floorId, start, end);
+    if (!building || !floorId || !isWallTool(state.tool) || distance(start, end) < 1) return;
+    const type = state.tool === "external-wall" ? "external" : "internal";
+    const wall = createWall(building, floorId, start, end, type);
     get().commit("Wall added", (project) => {
       project.buildingDefinitions.find((item) => item.id === building.id)?.walls.push(wall);
     });

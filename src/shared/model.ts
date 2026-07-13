@@ -29,7 +29,6 @@ export const wallSchema = z.object({
   start: vec2Schema,
   end: vec2Schema,
   type: z.enum(["external", "internal"]),
-  typeSource: z.enum(["auto", "manual"]),
   thickness: z.number().positive(),
   alignment: z.enum(["inside", "center", "outside"]),
 });

@@ -100,7 +100,9 @@ describe("project schema", () => {
       stairs: [],
     };
     project.buildingDefinitions.push(building);
-    expect(parseProjectDocument(project).buildingDefinitions[0]?.openings[0]?.kind).toBe("carport");
+    const parsed = parseProjectDocument(project);
+    expect(parsed.buildingDefinitions[0]?.openings[0]?.kind).toBe("carport");
+    expect(parsed.buildingDefinitions[0]?.walls[0]).not.toHaveProperty("typeSource");
   });
 
   it("persists a clicked polygon map layer", () => {

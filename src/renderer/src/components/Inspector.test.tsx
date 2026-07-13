@@ -21,7 +21,6 @@ describe("carport opening properties", () => {
       start: { x: 0, y: 0 },
       end: { x: 6000, y: 0 },
       type: "external",
-      typeSource: "auto",
       thickness: 250,
       alignment: "inside",
     });
@@ -65,5 +64,19 @@ describe("carport opening properties", () => {
       .getState()
       .project?.buildingDefinitions[0]?.openings.find((item) => item.id === "carport-opening");
     expect(opening).toMatchObject({ width: 3600, height: 2400 });
+  });
+
+  it("converts a selected wall through the explicit element control", () => {
+    useEditorStore.setState({ selection: { type: "wall", id: "garage-wall" } });
+    render(<Inspector />);
+
+    const element = screen.getByLabelText("Wall element");
+    expect(within(element).getAllByRole("option")).toHaveLength(2);
+    fireEvent.change(element, { target: { value: "internal" } });
+
+    const wall = useEditorStore
+      .getState()
+      .project?.buildingDefinitions[0]?.walls.find((item) => item.id === "garage-wall");
+    expect(wall).toMatchObject({ type: "internal", thickness: 100, alignment: "center" });
   });
 });

@@ -13,7 +13,7 @@ Download the Windows installer or portable x64 build from the [latest GitHub rel
 - Local `.sketcher` project archives with previews, embedded assets, atomic saves, crash recovery, and Recycle Bin deletion.
 - Z-up Three.js scene with grid, orbit camera, selection outlines, transform gizmos, a bottom viewport toolbar, handle-controlled clipping plane, object copy/paste, and undo/redo commands.
 - Foundation polygons with grid/axis snapping, direct millimetre input, area, and dimension overlays; walls default to right angles and Ctrl+wheel immediately applies and labels 5° construction-axis offsets.
-- Parametric floors, external/internal walls, real door/window/carport voids, straight stairs, and one automatic pitched roof with smaller merged roofs over orthogonal extensions.
+- Parametric floors, explicit Outer Wall and Inner Wall drawing tools, real door/window/carport voids, straight stairs, and one automatic pitched roof with smaller merged roofs over orthogonal extensions.
 - Shared building definitions, reusable building instances, Make Unique, procedural site objects, GLB/glTF import, and GLB export.
 - Norwegian place search, polygon/visible-area capture from matching satellite or topographic previews, resilient cached flat map surfaces up to 4096 pixels, and local GeoTIFF terrain import.
 - Global settings and encrypted optional provider credentials.
