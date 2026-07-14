@@ -49,6 +49,13 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
   const [addOpen, setAddOpen] = useState(false);
   const [clipOpen, setClipOpen] = useState(false);
   const activeBuilding = project?.buildingDefinitions.find((item) => item.id === activeBuildingId);
+  const selectedWall =
+    selection?.type === "wall"
+      ? activeBuilding?.walls.find((item) => item.id === selection.id)
+      : undefined;
+  const builderTransformable =
+    selection?.type === "stair" ||
+    (selection?.type === "wall" && selectedWall?.type === "internal");
 
   if (!project) return null;
 
@@ -237,6 +244,16 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
             {activeBuilding && (
               <>
                 {action("Select", "S", () => setTool("select"), { active: tool === "select" })}
+                {builderTransformable &&
+                  action("Move", "G", () => setTransformMode("translate"), {
+                    active: transformMode === "translate",
+                    title: "Move selected wall or stair (G)",
+                  })}
+                {builderTransformable &&
+                  action("Rotate", "R", () => setTransformMode("rotate"), {
+                    active: transformMode === "rotate",
+                    title: "Rotate selected wall or stair (R)",
+                  })}
                 {action("Outer wall", "O", () => setTool("external-wall"), {
                   active: tool === "external-wall",
                 })}
@@ -256,7 +273,6 @@ function ViewportToolbar({ onTerrain }: { onTerrain(): void }) {
                 })}
                 {(tool === "external-wall" || tool === "internal-wall") && (
                   <div className="toolbar-angle-status">
-                    <span>Wall angle</span>
                     <strong>{draft.axisAngle}°</strong>
                     <small>Ctrl + wheel</small>
                   </div>

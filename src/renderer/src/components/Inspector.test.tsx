@@ -79,4 +79,38 @@ describe("carport opening properties", () => {
       .project?.buildingDefinitions[0]?.walls.find((item) => item.id === "garage-wall");
     expect(wall).toMatchObject({ type: "internal", thickness: 100, alignment: "center" });
   });
+
+  it("toggles floor visibility for only the selected building instance", () => {
+    const project = createProject("Visibility test");
+    const building = createBuilding("House", [
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 5000, y: 4000 },
+      { x: 0, y: 4000 },
+    ]);
+    const floor = building.floors[0];
+    if (!floor) throw new Error("Expected a ground floor.");
+    project.buildingDefinitions.push(building);
+    project.scene.buildingInstances.push({
+      id: "house-instance",
+      definitionId: building.id,
+      name: "House",
+      transform: { position: { x: 0, y: 0, z: 0 }, rotationZ: 0, scale: 1 },
+      visible: true,
+    });
+    useEditorStore.setState({
+      project,
+      mode: "architecture",
+      selection: { type: "building", id: "house-instance" },
+      past: [],
+      future: [],
+    });
+    render(<Inspector />);
+
+    fireEvent.click(screen.getByLabelText(floor.name));
+
+    expect(useEditorStore.getState().project?.scene.buildingInstances[0]?.hiddenFloorIds).toEqual([
+      floor.id,
+    ]);
+  });
 });

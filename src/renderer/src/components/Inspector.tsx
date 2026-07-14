@@ -7,6 +7,11 @@ function numberOnBlur(value: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+function signedNumberOnBlur(value: string, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function BuilderInspector({
   project,
   building,
@@ -49,6 +54,10 @@ function BuilderInspector({
   const selectedOpening =
     selection?.type === "opening"
       ? building.openings.find((item) => item.id === selection.id)
+      : undefined;
+  const selectedStair =
+    selection?.type === "stair"
+      ? building.stairs.find((item) => item.id === selection.id)
       : undefined;
   const areaFormat = settings?.areaFormat ?? project.settings.areaFormat;
 
@@ -706,6 +715,101 @@ function BuilderInspector({
           </div>
         )}
       </details>
+
+      <details open={Boolean(selectedStair)} className="panel-section">
+        <summary>
+          Stairs · {building.stairs.filter((item) => item.floorId === floor?.id).length}
+        </summary>
+        <div className="scene-list compact">
+          {building.stairs
+            .filter((item) => item.floorId === floor?.id)
+            .map((stair, index) => (
+              <button
+                className={selectedStair?.id === stair.id ? "active" : ""}
+                key={stair.id}
+                onClick={() => setSelection({ type: "stair", id: stair.id })}
+              >
+                <span>T{index + 1}</span>
+                <div>
+                  <strong>Straight stair</strong>
+                  <small>{stair.riserCount} risers</small>
+                </div>
+              </button>
+            ))}
+        </div>
+        {selectedStair && (
+          <div className="property-card">
+            <div className="field-row">
+              <label>
+                X (mm)
+                <input
+                  type="number"
+                  key={`${selectedStair.id}-x-${selectedStair.position.x}`}
+                  defaultValue={selectedStair.position.x}
+                  onBlur={(event) =>
+                    commit("Stair moved", (document) => {
+                      const target = document.buildingDefinitions
+                        .find((item) => item.id === building.id)
+                        ?.stairs.find((item) => item.id === selectedStair.id);
+                      if (target)
+                        target.position.x = signedNumberOnBlur(
+                          event.target.value,
+                          selectedStair.position.x,
+                        );
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Y (mm)
+                <input
+                  type="number"
+                  key={`${selectedStair.id}-y-${selectedStair.position.y}`}
+                  defaultValue={selectedStair.position.y}
+                  onBlur={(event) =>
+                    commit("Stair moved", (document) => {
+                      const target = document.buildingDefinitions
+                        .find((item) => item.id === building.id)
+                        ?.stairs.find((item) => item.id === selectedStair.id);
+                      if (target)
+                        target.position.y = signedNumberOnBlur(
+                          event.target.value,
+                          selectedStair.position.y,
+                        );
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <label>
+              Rotation (°)
+              <input
+                type="number"
+                step={5}
+                key={`${selectedStair.id}-rotation-${selectedStair.rotationZ}`}
+                defaultValue={Math.round((selectedStair.rotationZ * 180) / Math.PI)}
+                onBlur={(event) =>
+                  commit("Stair rotated", (document) => {
+                    const target = document.buildingDefinitions
+                      .find((item) => item.id === building.id)
+                      ?.stairs.find((item) => item.id === selectedStair.id);
+                    if (target) {
+                      target.rotationZ =
+                        (signedNumberOnBlur(
+                          event.target.value,
+                          (selectedStair.rotationZ * 180) / Math.PI,
+                        ) *
+                          Math.PI) /
+                        180;
+                    }
+                  })
+                }
+              />
+            </label>
+            <p className="supporting-text">Drag the handle · G move · R rotate</p>
+          </div>
+        )}
+      </details>
     </aside>
   );
 }
@@ -721,6 +825,9 @@ function ArchitectureInspector({ project }: { project: ProjectDocument }) {
     selection?.type === "building"
       ? project.scene.buildingInstances.find((item) => item.id === selection.id)
       : undefined;
+  const selectedBuildingDefinition = selectedBuilding
+    ? project.buildingDefinitions.find((item) => item.id === selectedBuilding.definitionId)
+    : undefined;
   const selectedAsset =
     selection?.type === "asset"
       ? project.scene.assetInstances.find((item) => item.id === selection.id)
@@ -805,6 +912,32 @@ function ArchitectureInspector({ project }: { project: ProjectDocument }) {
         <div className="selection-properties">
           <span className="eyebrow">Selected building</span>
           <h3>{selectedBuilding.name}</h3>
+          {selectedBuildingDefinition && (
+            <div className="level-visibility-list">
+              <strong>Visible levels</strong>
+              {selectedBuildingDefinition.floors.map((floor) => (
+                <label key={floor.id}>
+                  <input
+                    type="checkbox"
+                    checked={!selectedBuilding.hiddenFloorIds?.includes(floor.id)}
+                    onChange={(event) =>
+                      commit("Building level visibility changed", (document) => {
+                        const target = document.scene.buildingInstances.find(
+                          (item) => item.id === selectedBuilding.id,
+                        );
+                        if (!target) return;
+                        const hidden = new Set(target.hiddenFloorIds ?? []);
+                        if (event.target.checked) hidden.delete(floor.id);
+                        else hidden.add(floor.id);
+                        target.hiddenFloorIds = [...hidden];
+                      })
+                    }
+                  />
+                  <span>{floor.type === "roof" ? "Roof" : floor.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
           <div className="button-row wrap">
             <button
               className="button secondary small"

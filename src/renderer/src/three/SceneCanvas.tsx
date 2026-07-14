@@ -29,6 +29,11 @@ import { clippingHandlePosition, clippingOffsetFromHandle, createClippingPlane }
 import { setExportRoot } from "./sceneBridge";
 import { createBuildingGroup, createBuiltinAsset, createProjectContent } from "./sceneGeometry";
 
+type DimensionEdit =
+  | { kind: "footprint-edge"; buildingId: string; startIndex: number; value: number }
+  | { kind: "wall-length"; buildingId: string; wallId: string; value: number }
+  | { kind: "opening-width"; buildingId: string; openingId: string; value: number };
+
 interface DimensionLine {
   key: string;
   x1: number;
@@ -39,6 +44,7 @@ interface DimensionLine {
   labelY: number;
   angle: number;
   text: string;
+  edit?: DimensionEdit;
 }
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
@@ -63,6 +69,16 @@ function entityRoot(object: THREE.Object3D | null): { type?: string; id?: string
     current = current.parent;
   }
   return {};
+}
+
+function findEntity(root: THREE.Object3D, type: string, id: string): THREE.Object3D | undefined {
+  let found: THREE.Object3D | undefined;
+  root.traverse((child) => {
+    if (!found && child.userData.entityType === type && child.userData.entityId === id) {
+      found = child;
+    }
+  });
+  return found;
 }
 
 interface BundledModel {
@@ -250,6 +266,7 @@ function projectDimension(
   end: Vec2,
   text: string,
   offset: number,
+  edit?: DimensionEdit,
 ): DimensionLine {
   const a = new THREE.Vector3(start.x / 1000, start.y / 1000, 0.03).project(engine.camera);
   const b = new THREE.Vector3(end.x / 1000, end.y / 1000, 0.03).project(engine.camera);
@@ -272,6 +289,7 @@ function projectDimension(
     labelY: (y1 + y2) / 2 + offsetY,
     angle: (Math.atan2(dy, dx) * 180) / Math.PI,
     text,
+    edit,
   };
 }
 
@@ -290,6 +308,7 @@ function appendOpeningDimensions(
     right: number;
   },
   label: string,
+  edit?: DimensionEdit,
 ): void {
   const leftBoundary = pointAlongWall(wall, clearances.leftBoundaryOffset);
   const start = pointAlongWall(wall, offset);
@@ -308,7 +327,7 @@ function appendOpeningDimensions(
       ),
     );
   }
-  lines.push(projectDimension(engine, rect, `${key}-opening`, start, end, label, 56));
+  lines.push(projectDimension(engine, rect, `${key}-opening`, start, end, label, 56, edit));
   if (clearances.right > 1) {
     lines.push(
       projectDimension(
@@ -327,9 +346,15 @@ function appendOpeningDimensions(
 export function SceneCanvas() {
   const hostRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dimensionInputRef = useRef<HTMLInputElement>(null);
   const engineRef = useRef<SceneEngine | null>(null);
   const rawPointerRef = useRef<Vec2 | null>(null);
   const [dimensions, setDimensions] = useState<DimensionLine[]>([]);
+  const [dimensionEdit, setDimensionEdit] = useState<{
+    line: DimensionLine;
+    value: string;
+  } | null>(null);
+  const isDimensionEditing = Boolean(dimensionEdit);
   const [inputPosition, setInputPosition] = useState({ x: 0, y: 0, visible: false });
 
   const project = useEditorStore((state) => state.project);
@@ -369,6 +394,15 @@ export function SceneCanvas() {
           tool === "carport" ? 3000 : tool === "door" ? 900 : 1200,
         )
       : null;
+
+  useEffect(() => {
+    if (!isDimensionEditing) return;
+    const frame = requestAnimationFrame(() => {
+      dimensionInputRef.current?.focus();
+      dimensionInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isDimensionEditing]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -792,40 +826,106 @@ export function SceneCanvas() {
     engine.transform.detach();
     engine.outline.selectedObjects = [];
     if (!selection) return;
-    const object = engine.content.children.find(
-      (child) =>
-        child.userData.entityType === selection.type && child.userData.entityId === selection.id,
-    );
+    const object =
+      mode === "architecture"
+        ? engine.content.children.find(
+            (child) =>
+              child.userData.entityType === selection.type &&
+              child.userData.entityId === selection.id,
+          )
+        : findEntity(engine.content, selection.type, selection.id);
     if (!object) return;
     engine.outline.selectedObjects = [object];
-    if (
+    const building = project.buildingDefinitions.find((item) => item.id === activeBuildingId);
+    const selectedWall =
+      selection.type === "wall"
+        ? building?.walls.find((item) => item.id === selection.id)
+        : undefined;
+    const builderTransformable =
+      mode === "builder" &&
+      tool === "select" &&
+      (selection.type === "stair" ||
+        (selection.type === "wall" && selectedWall?.type === "internal"));
+    const architectureTransformable =
       mode === "architecture" &&
+      tool === "select" &&
       !clipping.enabled &&
-      (selection.type === "building" || selection.type === "asset")
-    ) {
+      (selection.type === "building" || selection.type === "asset");
+    if (builderTransformable || architectureTransformable) {
+      if (mode === "builder") {
+        engine.transform.setSpace("world");
+        engine.transform.setTranslationSnap((project.settings.gridSpacing ?? 100) / 1000);
+        engine.transform.showX = transformMode !== "rotate";
+        engine.transform.showY = transformMode !== "rotate";
+        engine.transform.showZ = transformMode === "rotate";
+      } else {
+        engine.transform.setSpace("world");
+        engine.transform.setTranslationSnap(null);
+        engine.transform.showX = true;
+        engine.transform.showY = true;
+        engine.transform.showZ = true;
+      }
       engine.transform.attach(object);
       const onMouseUp = () => {
         const current = useEditorStore.getState();
-        commit("Object transformed", (document) => {
-          const target =
-            selection.type === "building"
-              ? document.scene.buildingInstances.find((item) => item.id === selection.id)
-              : document.scene.assetInstances.find((item) => item.id === selection.id);
-          if (!target) return;
-          target.transform.position = {
-            x: Math.round(object.position.x * 1000),
-            y: Math.round(object.position.y * 1000),
-            z: Math.round(object.position.z * 1000),
-          };
-          target.transform.rotationZ = object.rotation.z;
-          if (selection.type === "asset") target.transform.scale = object.scale.x;
-        });
+        if (mode === "builder" && building) {
+          commit(
+            selection.type === "wall" ? "Inner wall transformed" : "Stair transformed",
+            (document) => {
+              const targetBuilding = document.buildingDefinitions.find(
+                (item) => item.id === building.id,
+              );
+              if (!targetBuilding) return;
+              if (selection.type === "wall") {
+                const target = targetBuilding.walls.find((item) => item.id === selection.id);
+                if (!target) return;
+                const length = distance(target.start, target.end);
+                const center = { x: object.position.x * 1000, y: object.position.y * 1000 };
+                const direction = {
+                  x: Math.cos(object.rotation.z),
+                  y: Math.sin(object.rotation.z),
+                };
+                target.start = {
+                  x: Math.round(center.x - (direction.x * length) / 2),
+                  y: Math.round(center.y - (direction.y * length) / 2),
+                };
+                target.end = {
+                  x: Math.round(center.x + (direction.x * length) / 2),
+                  y: Math.round(center.y + (direction.y * length) / 2),
+                };
+              } else if (selection.type === "stair") {
+                const target = targetBuilding.stairs.find((item) => item.id === selection.id);
+                if (!target) return;
+                target.position = {
+                  x: Math.round(object.position.x * 1000),
+                  y: Math.round(object.position.y * 1000),
+                };
+                target.rotationZ = object.rotation.z;
+              }
+            },
+          );
+        } else {
+          commit("Object transformed", (document) => {
+            const target =
+              selection.type === "building"
+                ? document.scene.buildingInstances.find((item) => item.id === selection.id)
+                : document.scene.assetInstances.find((item) => item.id === selection.id);
+            if (!target) return;
+            target.transform.position = {
+              x: Math.round(object.position.x * 1000),
+              y: Math.round(object.position.y * 1000),
+              z: Math.round(object.position.z * 1000),
+            };
+            target.transform.rotationZ = object.rotation.z;
+            if (selection.type === "asset") target.transform.scale = object.scale.x;
+          });
+        }
         current.setStatus("Transform committed");
       };
       engine.transform.addEventListener("mouseUp", onMouseUp);
       return () => engine.transform.removeEventListener("mouseUp", onMouseUp);
     }
-  }, [selection, mode, project, commit, clipping.enabled]);
+  }, [selection, mode, tool, project, activeBuildingId, transformMode, commit, clipping.enabled]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -1105,8 +1205,12 @@ export function SceneCanvas() {
           engine.raycaster.setFromCamera(engine.pointer, engine.camera);
           const intersections = engine.raycaster.intersectObjects(engine.content.children, true);
           const entity = entityRoot(intersections[0]?.object ?? null);
-          if (entity.type === "wall" && entity.id) setSelection({ type: "wall", id: entity.id });
-          else setSelection(null);
+          if (
+            entity.id &&
+            (entity.type === "wall" || entity.type === "opening" || entity.type === "stair")
+          ) {
+            setSelection({ type: entity.type, id: entity.id });
+          } else setSelection(null);
         }
         return;
       }
@@ -1310,6 +1414,14 @@ export function SceneCanvas() {
             end,
             `${Math.round(distance(start, end))} mm`,
             18,
+            building
+              ? {
+                  kind: "footprint-edge",
+                  buildingId: building.id,
+                  startIndex: index,
+                  value: distance(start, end),
+                }
+              : undefined,
           ),
         );
       }
@@ -1327,7 +1439,36 @@ export function SceneCanvas() {
             opening.width,
             openingClearances(wall, building.openings, opening.offset, opening.width, opening.id),
             `${opening.kind === "carport" ? "Carport" : opening.kind === "door" ? "Door" : "Window"} ${Math.round(opening.width)} mm`,
+            {
+              kind: "opening-width",
+              buildingId: building.id,
+              openingId: opening.id,
+              value: opening.width,
+            },
           );
+        }
+        if (state.selection?.type === "wall") {
+          const selectedWall = building.walls.find((item) => item.id === state.selection?.id);
+          if (selectedWall && selectedWall.floorId === state.activeFloorId) {
+            const wallLength = distance(selectedWall.start, selectedWall.end);
+            lines.push(
+              projectDimension(
+                engine,
+                rect,
+                `wall-${selectedWall.id}`,
+                selectedWall.start,
+                selectedWall.end,
+                `${Math.round(wallLength)} mm`,
+                28,
+                {
+                  kind: "wall-length",
+                  buildingId: building.id,
+                  wallId: selectedWall.id,
+                  value: wallLength,
+                },
+              ),
+            );
+          }
         }
         const hover = state.draft.hover;
         if (
@@ -1391,6 +1532,62 @@ export function SceneCanvas() {
     state.setDraft({ numericInput: "" });
   };
 
+  const commitDimensionEdit = () => {
+    const edit = dimensionEdit?.line.edit;
+    const value = Number.parseFloat(dimensionEdit?.value ?? "");
+    setDimensionEdit(null);
+    if (!edit || !Number.isFinite(value) || value <= 0) return;
+    if (edit.kind === "footprint-edge") {
+      commit("Foundation dimension changed", (document) => {
+        const building = document.buildingDefinitions.find((item) => item.id === edit.buildingId);
+        const start = building?.footprint[edit.startIndex];
+        const endIndex = building ? (edit.startIndex + 1) % building.footprint.length : -1;
+        const end = building?.footprint[endIndex];
+        if (!building || !start || !end) return;
+        const currentLength = distance(start, end);
+        if (currentLength <= 0) return;
+        const previousEnd = { ...end };
+        const scale = value / currentLength;
+        const nextEnd = {
+          x: Math.round(start.x + (end.x - start.x) * scale),
+          y: Math.round(start.y + (end.y - start.y) * scale),
+        };
+        building.footprint[endIndex] = nextEnd;
+        for (const wall of building.walls) {
+          if (distance(wall.start, previousEnd) <= 1) wall.start = { ...nextEnd };
+          if (distance(wall.end, previousEnd) <= 1) wall.end = { ...nextEnd };
+        }
+      });
+    } else if (edit.kind === "wall-length") {
+      commit("Wall length changed", (document) => {
+        const building = document.buildingDefinitions.find((item) => item.id === edit.buildingId);
+        const wall = building?.walls.find((item) => item.id === edit.wallId);
+        if (!building || !wall) return;
+        const currentLength = distance(wall.start, wall.end);
+        if (currentLength <= 0) return;
+        const scale = value / currentLength;
+        wall.end = {
+          x: Math.round(wall.start.x + (wall.end.x - wall.start.x) * scale),
+          y: Math.round(wall.start.y + (wall.end.y - wall.start.y) * scale),
+        };
+        for (const opening of building.openings.filter((item) => item.wallId === wall.id)) {
+          opening.offset = Math.min(opening.offset, Math.max(0, value - opening.width));
+        }
+      });
+    } else {
+      commit("Opening width changed", (document) => {
+        const building = document.buildingDefinitions.find((item) => item.id === edit.buildingId);
+        const opening = building?.openings.find((item) => item.id === edit.openingId);
+        const wall = building?.walls.find((item) => item.id === opening?.wallId);
+        if (!opening || !wall) return;
+        opening.width = Math.max(
+          100,
+          Math.min(value, distance(wall.start, wall.end) - opening.offset),
+        );
+      });
+    }
+  };
+
   const lastDraftPoint = draft.points.at(-1);
 
   return (
@@ -1404,7 +1601,10 @@ export function SceneCanvas() {
       data-view={mode === "builder" ? "top-locked" : "perspective"}
       ref={hostRef}
     >
-      <svg className="dimension-overlay" aria-hidden="true">
+      <svg
+        className={`dimension-overlay${tool === "select" ? " editing-enabled" : ""}`}
+        aria-label="Dimensions"
+      >
         {dimensions.map((line) => {
           const dx = line.x2 - line.x1;
           const dy = line.y2 - line.y1;
@@ -1426,17 +1626,69 @@ export function SceneCanvas() {
                 x2={line.x2 + capX}
                 y2={line.y2 + capY}
               />
-              <text
-                x={line.labelX}
-                y={line.labelY}
-                transform={`rotate(${line.angle} ${line.labelX} ${line.labelY})`}
-              >
-                {line.text}
-              </text>
+              {line.edit ? (
+                <a
+                  aria-label={`Edit ${line.text}`}
+                  href={`#dimension-${line.key}`}
+                  onClick={(event) => event.preventDefault()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setDimensionEdit({ line, value: String(Math.round(line.edit?.value ?? 0)) });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setDimensionEdit({ line, value: String(Math.round(line.edit?.value ?? 0)) });
+                    }
+                  }}
+                >
+                  <text
+                    className="editable"
+                    x={line.labelX}
+                    y={line.labelY}
+                    transform={`rotate(${line.angle} ${line.labelX} ${line.labelY})`}
+                  >
+                    {line.text}
+                  </text>
+                </a>
+              ) : (
+                <text
+                  x={line.labelX}
+                  y={line.labelY}
+                  transform={`rotate(${line.angle} ${line.labelX} ${line.labelY})`}
+                >
+                  {line.text}
+                </text>
+              )}
             </g>
           );
         })}
       </svg>
+      {dimensionEdit && (
+        <input
+          ref={dimensionInputRef}
+          className="dimension-edit-input"
+          aria-label="Edit dimension in millimetres"
+          style={{ left: dimensionEdit.line.labelX, top: dimensionEdit.line.labelY }}
+          value={dimensionEdit.value}
+          onChange={(event) => setDimensionEdit({ ...dimensionEdit, value: event.target.value })}
+          onBlur={commitDimensionEdit}
+          onFocus={(event) => event.currentTarget.select()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitDimensionEdit();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              setDimensionEdit(null);
+            }
+          }}
+        />
+      )}
       {mode === "builder" && draft.hover && (tool === "foundation" || isWallTool(tool)) && (
         <div
           className="angle-offset-label"
@@ -1445,8 +1697,7 @@ export function SceneCanvas() {
             top: inputPosition.y,
           }}
         >
-          {isWallTool(tool) && (tool === "external-wall" ? "Outer wall · " : "Inner wall · ")}
-          {draft.axisAngle === 0 ? "Right angle · 0°" : `Axis offset · ${draft.axisAngle}°`}
+          {draft.axisAngle}°
         </div>
       )}
       {inputPosition.visible && (

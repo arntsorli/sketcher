@@ -275,12 +275,15 @@ describe("building envelope geometry", () => {
     const groundView = createBuildingGroup(building, ground.id);
     const upperView = createBuildingGroup(building, upper.id);
     const roofView = createBuildingGroup(building, roof.id);
+    const architectureView = createBuildingGroup(building, undefined, new Set([upper.id, roof.id]));
     expect(countByType(groundView, "floor")).toBe(1);
     expect(countByType(groundView, "roof")).toBe(0);
     expect(countByType(upperView, "floor")).toBe(2);
     expect(countByType(upperView, "roof")).toBe(0);
     expect(countByType(roofView, "floor")).toBe(2);
     expect(countByType(roofView, "roof")).toBe(1);
+    expect(countByType(architectureView, "floor")).toBe(1);
+    expect(countByType(architectureView, "roof")).toBe(0);
   });
 
   it("renders a clicked map polygon as a clipped terrain surface", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProject, parseProjectDocument } from "./model";
+import { createBuilding, createProject, parseProjectDocument } from "./model";
 
 describe("project schema", () => {
   it("round-trips a current project", () => {
@@ -45,6 +45,29 @@ describe("project schema", () => {
     expect(parseProjectDocument(project).assetDefinitions.at(-1)?.polygon?.extrusionHeight).toBe(
       2700,
     );
+  });
+
+  it("persists per-instance hidden building levels", () => {
+    const project = createProject("Level visibility");
+    const building = createBuilding("House", [
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 5000, y: 4000 },
+      { x: 0, y: 4000 },
+    ]);
+    project.buildingDefinitions.push(building);
+    project.scene.buildingInstances.push({
+      id: "house-instance",
+      definitionId: building.id,
+      name: "House",
+      transform: { position: { x: 0, y: 0, z: 0 }, rotationZ: 0, scale: 1 },
+      visible: true,
+      hiddenFloorIds: ["upper-floor", "roof"],
+    });
+    expect(parseProjectDocument(project).scene.buildingInstances[0]?.hiddenFloorIds).toEqual([
+      "upper-floor",
+      "roof",
+    ]);
   });
 
   it("persists a vehicle-scale carport opening", () => {

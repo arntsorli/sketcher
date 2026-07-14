@@ -1443,6 +1443,13 @@ strong {
   font-weight: 700;
 }
 
+.dimension-overlay.editing-enabled text.editable {
+  pointer-events: all;
+  cursor: text;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 .scene-host[data-canvas-tone="light"] .dimension-overlay line {
   stroke: #294b5d;
 }
@@ -1466,6 +1473,20 @@ strong {
   font-weight: 750;
   text-align: center;
   pointer-events: none;
+}
+
+.dimension-edit-input {
+  position: absolute;
+  z-index: 8;
+  width: 92px;
+  min-height: 28px;
+  transform: translate(-50%, -50%);
+  border-color: var(--accent);
+  background: #0b1820;
+  color: white;
+  padding: 4px 7px;
+  font: 750 11px / 1.2 var(--font-mono);
+  text-align: center;
 }
 
 .angle-offset-label {
@@ -1721,6 +1742,35 @@ strong {
 .selection-properties h3 {
   margin: 0;
   font-size: 14px;
+}
+
+.level-visibility-list {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 9px 0;
+}
+
+.level-visibility-list > strong {
+  color: var(--quiet);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.level-visibility-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 10px;
+}
+
+.level-visibility-list input {
+  width: 14px;
+  height: 14px;
+  min-height: 0;
 }
 
 .instruction-card {

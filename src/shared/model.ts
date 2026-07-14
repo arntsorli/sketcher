@@ -85,6 +85,7 @@ const buildingInstanceSchema = z.object({
   name: z.string(),
   transform: transformSchema,
   visible: z.boolean(),
+  hiddenFloorIds: z.array(z.string()).optional(),
 });
 
 const assetDefinitionSchema = z.object({

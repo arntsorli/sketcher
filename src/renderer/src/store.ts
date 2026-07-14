@@ -65,6 +65,7 @@ export type Selection =
   | { type: "terrain"; id: string }
   | { type: "wall"; id: string }
   | { type: "opening"; id: string }
+  | { type: "stair"; id: string }
   | null;
 
 interface DraftState {
@@ -360,8 +361,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setSelection(selection) {
     set((state) => ({
       selection,
+      tool: selection ? "select" : state.tool,
       transformMode:
-        selection?.type === "building" && state.transformMode === "scale"
+        selection?.type !== "asset" && state.transformMode === "scale"
           ? "translate"
           : state.transformMode,
     }));
@@ -651,11 +653,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const floor = building?.floors.find((item) => item.id === floorId);
     if (!building || !floorId || !floor) return;
     const metrics = calculateStair(floor.height);
+    const stairId = crypto.randomUUID();
     get().commit("Straight stair added", (project) => {
       project.buildingDefinitions
         .find((item) => item.id === building.id)
         ?.stairs.push({
-          id: crypto.randomUUID(),
+          id: stairId,
           floorId,
           position: point,
           rotationZ: 0,
@@ -663,6 +666,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           treadDepth: 250,
           riserCount: metrics.riserCount,
         });
+    });
+    set({
+      selection: { type: "stair", id: stairId },
+      tool: "select",
+      transformMode: "translate",
+      status: "Stair placed · drag to move or choose Rotate",
     });
   },
 

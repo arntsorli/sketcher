@@ -36,7 +36,7 @@ This is the authoritative delivery ledger for the first complete Sketcher releas
 | SK-028 | Redistributable asset-pack policy | Todo | SK-013, SK-026 | License review and import workflow documentation |
 | SK-029 | Wall corner joinery | Todo | SK-009, SK-011 | Miter/trim geometry tests for straight and angled wall junctions |
 | SK-030 | Builder floor-isolation visibility | Todo | SK-009, SK-010 | Multi-floor Builder visibility smoke |
-| SK-031 | Architecture floor inspection | Todo | SK-007, SK-012 | Per-instance floor visibility and selection smoke |
+| SK-031 | Architecture floor inspection | Done for v0.1.4 | SK-007, SK-012 | Per-instance floor visibility and selection smoke |
 | SK-032 | Delete selected scene items | Todo | SK-007, SK-013 | Keyboard deletion, confirmation, undo, and persistence tests |
 | SK-033 | Primitives, polygon faces, and extrusion | In progress | SK-007, SK-013 | Persisted polygon/extrusion geometry and desktop modelling smoke |
 | SK-034 | Viewport tools, scene clipboard, clipping, and wall angles | Done for v0.1.4 | SK-007, SK-009, SK-013 | Clipboard undo, clipping-plane unit tests, and desktop modelling smoke |
@@ -179,7 +179,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Grid and construction-axis snapping, closure snapping, 5° Ctrl+wheel offset, provisional geometry, direct numeric input, validation, area, perimeter, and transition to the Outer Wall tool.
 - Builder uses a locked orthographic top view with no camera rotation; nearby vertices and edges take priority over axes and grid using an aggressive screen-scaled snap radius.
-- Projected SVG dimension lines, end stops, aligned millimetre labels, and Builder-only display.
+- Projected SVG dimension lines, end stops, aligned millimetre labels, Builder-only display, and direct editing by double-clicking footprint, wall, or opening dimensions.
 - Self-intersection, zero-length, too-few-points, and zero-area checks. Crossing and duplicate edges are rejected before entering the draft; Backspace and the visible Undo last point action recover individual vertices without discarding the polygon.
 - Direct-input E2E creates a 5000×8000 mm foundation, removes/re-adds a point, saves, reopens, and verifies the 40.00 m² definition in Builder.
 
@@ -202,6 +202,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Default outer/inner thickness, floor height, slab thickness, active-floor panel, floor addition, and recalculated elevations.
 - Separate Outer Wall and Inner Wall drawing tools, explicit element conversion, per-type thickness/alignment defaults, per-floor wall lists, and generated wall solids.
+- Selected inner walls expose centred move and rotate handles that update their endpoints while preserving length.
 
 **Todo / hardening**
 
@@ -217,6 +218,7 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 - Door/window placement on the nearest wall with defaults, sill constraints, property editing, overlap validation, and actual wall void geometry made from non-overlapping wall pieces.
 - Straight-stair riser derivation, rendered steps, and stair clearance cut from the slab above.
+- A newly placed stair is selected immediately and exposes move and rotate handles plus exact position and rotation fields.
 - One automatic, normal pitched-roof system with editable pitch, overhang, and thickness. Its primary ridge follows the longest footprint direction, while orthogonal protrusions receive smaller cross-roof modules merged into the primary surface.
 - The roof is a closed solid whose underside begins at the final wall top, preventing the final-storey wall from showing through it.
 - Door/window placement previews use a wide wall snap band, translucent opening box, validity colour, and left/right clearances to the nearest wall end or opening. Finalized openings keep those dimensions visible in Builder mode.
@@ -506,12 +508,16 @@ The old path may continue to contain `.codex`, `.agents`, or turn-diff metadata 
 
 **Outcome:** A placed building can be inspected floor-by-floor in the site without opening Builder mode or affecting other instances.
 
-**Todo**
+**Implemented**
 
-- Add per-selected-building visibility controls in the Architecture Inspector: show all, isolate a floor, hide floors above a selected floor, and restore all.
-- Keep the setting session-only by default so an inspection view does not change the shared building definition or other placements.
-- Ensure picking, outlines, focus, transforms, export visibility, and scene rebuilds respect the chosen inspection visibility.
-- Add smoke coverage for selecting a placed multi-storey building, isolating a floor, and restoring the full building.
+- The selected building's Architecture Inspector lists every story and roof as an independent visibility checkbox.
+- Hidden levels are stored on the building instance, leaving the shared definition and other placements unchanged.
+- Scene rebuilds, picking, outlines, focus, and visible-scene export operate on the resulting visible hierarchy.
+- Geometry tests cover per-instance story and roof hiding; desktop smoke toggles the selected building's roof off and on.
+
+**Todo / hardening**
+
+- Add convenience actions for Show all, isolate one floor, and hide all floors above a chosen level if larger projects make individual toggles cumbersome.
 
 ### SK-032 — Delete selected scene items
 

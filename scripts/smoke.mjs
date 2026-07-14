@@ -99,7 +99,7 @@ try {
   await window.mouse.wheel(0, 100);
   await window.keyboard.up("Control");
   await window.locator('.scene-host[data-axis-angle="5"]').waitFor({ state: "visible" });
-  await window.getByText("Outer wall · Axis offset · 5°").waitFor({ state: "visible" });
+  await window.getByText("5°", { exact: true }).first().waitFor({ state: "visible" });
   await window.screenshot({ path: path.join(artifacts, "wall-angle-offset.png") });
   await window.keyboard.down("Control");
   await window.mouse.wheel(0, -100);
@@ -112,6 +112,25 @@ try {
   await canvas.click({ position: { x: bounds.width * 0.49, y: bounds.height * 0.6 } });
   await canvas.click({ position: { x: bounds.width * 0.49, y: bounds.height * 0.56 } });
   await window.getByText("Walls · 2").waitFor({ state: "visible" });
+  await window.locator(".scene-list.compact button").filter({ hasText: "Inner wall" }).click();
+  await modellingToolbar.getByRole("button", { name: "Move", exact: true }).waitFor();
+  await modellingToolbar.getByRole("button", { name: "Rotate", exact: true }).waitFor();
+  await modellingToolbar.getByRole("button", { name: "Rotate", exact: true }).click();
+  await window.locator('.scene-host[data-transform-mode="rotate"]').waitFor();
+  await modellingToolbar.getByRole("button", { name: "Move", exact: true }).click();
+  const editableDimension = window.locator(".dimension-overlay a").first();
+  await editableDimension.dblclick();
+  const dimensionInput = window.getByLabel("Edit dimension in millimetres");
+  await dimensionInput.waitFor({ state: "visible" });
+  await dimensionInput.press("Enter");
+  await modellingToolbar.getByRole("button", { name: "Stair", exact: true }).click();
+  await canvas.click({ position: { x: bounds.width * 0.54, y: bounds.height * 0.58 } });
+  await window.getByText("Stairs · 1").waitFor({ state: "visible" });
+  await window.getByText("Drag the handle · G move · R rotate").waitFor({ state: "visible" });
+  await modellingToolbar.getByRole("button", { name: "Rotate", exact: true }).click();
+  await window.locator('.scene-host[data-transform-mode="rotate"]').waitFor();
+  await modellingToolbar.getByRole("button", { name: "Move", exact: true }).click();
+  await window.screenshot({ path: path.join(artifacts, "builder-transform-handles.png") });
   await window.getByRole("button", { name: /Door/ }).click();
   await window.mouse.move(bounds.x + bounds.width * 0.51, bounds.y + bounds.height * 0.64);
   await window
@@ -132,6 +151,10 @@ try {
   await window.getByRole("button", { name: "Building 1" }).first().click();
   await canvas.click({ position: { x: bounds.width * 0.34, y: bounds.height * 0.55 } });
   await window.getByText("1 buildings · 0 objects").waitFor({ state: "visible" });
+  await window.locator(".inspector .scene-list button").filter({ hasText: "Building 1" }).click();
+  const roofVisibility = window.getByLabel("Roof");
+  await roofVisibility.uncheck();
+  await roofVisibility.check();
   await window.keyboard.press("f");
   await window.waitForTimeout(250);
   await canvas.click({ position: { x: bounds.width * 0.82, y: bounds.height * 0.25 } });

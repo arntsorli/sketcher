@@ -133,4 +133,44 @@ describe("scene clipboard", () => {
       { type: "external", thickness: 250, alignment: "inside" },
     ]);
   });
+
+  it("returns to the Select tool when an entity is selected", () => {
+    useEditorStore.setState({ tool: "internal-wall", selection: null });
+
+    useEditorStore.getState().setSelection({ type: "wall", id: "inner-wall" });
+
+    expect(useEditorStore.getState().tool).toBe("select");
+  });
+
+  it("selects a newly placed stair for immediate movement and rotation", () => {
+    const project = createProject("Stair placement");
+    const building = createBuilding("House", [
+      { x: 0, y: 0 },
+      { x: 5000, y: 0 },
+      { x: 5000, y: 4000 },
+      { x: 0, y: 4000 },
+    ]);
+    const floor = building.floors[0];
+    if (!floor) throw new Error("Expected a ground floor.");
+    project.buildingDefinitions.push(building);
+    useEditorStore.setState({
+      project,
+      mode: "builder",
+      activeBuildingId: building.id,
+      activeFloorId: floor.id,
+      tool: "stair",
+      selection: null,
+      past: [],
+      future: [],
+    });
+
+    useEditorStore.getState().addStair({ x: 1200, y: 1800 });
+
+    const state = useEditorStore.getState();
+    const stair = state.project?.buildingDefinitions[0]?.stairs[0];
+    expect(stair?.position).toEqual({ x: 1200, y: 1800 });
+    expect(state.selection).toEqual({ type: "stair", id: stair?.id });
+    expect(state.tool).toBe("select");
+    expect(state.transformMode).toBe("translate");
+  });
 });

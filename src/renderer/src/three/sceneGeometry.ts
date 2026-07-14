@@ -384,17 +384,24 @@ function wallWithOpenings(
     .filter((opening) => opening.wallId === wall.id)
     .sort((left, right) => left.offset - right.offset);
   const wallGroup = new THREE.Group();
-  wallGroup.position.set(wall.start.x * MM_TO_M, wall.start.y * MM_TO_M, floorElevation * MM_TO_M);
+  wallGroup.position.set(
+    ((wall.start.x + wall.end.x) / 2) * MM_TO_M,
+    ((wall.start.y + wall.end.y) / 2) * MM_TO_M,
+    floorElevation * MM_TO_M,
+  );
   wallGroup.rotation.z = Math.atan2(wall.end.y - wall.start.y, wall.end.x - wall.start.x);
   wallGroup.userData = {
     entityType: "wall",
     entityId: wall.id,
   };
   group.add(wallGroup);
+  const wallGeometry = new THREE.Group();
+  wallGeometry.position.x = (-length / 2) * MM_TO_M;
+  wallGroup.add(wallGeometry);
   let cursor = 0;
   for (const opening of sorted) {
     boxPiece(
-      wallGroup,
+      wallGeometry,
       wall,
       insideSign,
       miter.hasMiter ? miter : undefined,
@@ -404,7 +411,7 @@ function wallWithOpenings(
       floorHeight,
     );
     boxPiece(
-      wallGroup,
+      wallGeometry,
       wall,
       insideSign,
       miter.hasMiter ? miter : undefined,
@@ -415,7 +422,7 @@ function wallWithOpenings(
     );
     const top = opening.sillHeight + opening.height;
     boxPiece(
-      wallGroup,
+      wallGeometry,
       wall,
       insideSign,
       miter.hasMiter ? miter : undefined,
@@ -427,7 +434,7 @@ function wallWithOpenings(
     cursor = Math.max(cursor, opening.offset + opening.width);
   }
   boxPiece(
-    wallGroup,
+    wallGeometry,
     wall,
     insideSign,
     miter.hasMiter ? miter : undefined,
@@ -436,7 +443,7 @@ function wallWithOpenings(
     0,
     floorHeight,
   );
-  addOpeningDetails(wallGroup, wall, insideSign, sorted);
+  addOpeningDetails(wallGeometry, wall, insideSign, sorted);
 }
 
 interface RoofPoint {
@@ -1047,6 +1054,7 @@ function addRoof(group: THREE.Group, building: BuildingDefinition): void {
 export function createBuildingGroup(
   building: BuildingDefinition,
   builderFloorId?: string,
+  hiddenFloorIds: ReadonlySet<string> = new Set(),
 ): THREE.Group {
   const group = new THREE.Group();
   group.name = building.name;
@@ -1057,7 +1065,7 @@ export function createBuildingGroup(
       ? storyFloors.findIndex((floor) => floor.id === selectedFloor.id)
       : Number.POSITIVE_INFINITY;
   for (const [floorIndex, floor] of storyFloors.entries()) {
-    if (floorIndex > highestVisibleStory) continue;
+    if (floorIndex > highestVisibleStory || hiddenFloorIds.has(floor.id)) continue;
     const shape = shapeFromFootprint(building, floorIndex);
     const slab = new THREE.Mesh(
       new THREE.ExtrudeGeometry(shape, {
@@ -1083,6 +1091,15 @@ export function createBuildingGroup(
     }
     for (const stair of building.stairs.filter((item) => item.floorId === floor.id)) {
       const riserHeight = floor.height / stair.riserCount;
+      const stairGroup = new THREE.Group();
+      stairGroup.position.set(
+        stair.position.x * MM_TO_M,
+        stair.position.y * MM_TO_M,
+        (floor.elevation + floor.slabThickness) * MM_TO_M,
+      );
+      stairGroup.rotation.z = stair.rotationZ;
+      stairGroup.userData = { entityType: "stair", entityId: stair.id };
+      group.add(stairGroup);
       for (let index = 0; index < stair.riserCount; index += 1) {
         const stepHeight = riserHeight * (index + 1);
         const geometry = new THREE.BoxGeometry(
@@ -1091,19 +1108,19 @@ export function createBuildingGroup(
           stepHeight * MM_TO_M,
         );
         const step = new THREE.Mesh(geometry, materials.stair);
-        step.position.set(
-          stair.position.x * MM_TO_M,
-          (stair.position.y + index * stair.treadDepth) * MM_TO_M,
-          (floor.elevation + floor.slabThickness + stepHeight / 2) * MM_TO_M,
-        );
-        step.rotation.z = stair.rotationZ;
+        step.position.set(0, index * stair.treadDepth * MM_TO_M, (stepHeight / 2) * MM_TO_M);
         step.castShadow = true;
-        step.userData = { entityType: "stair", entityId: stair.id };
-        group.add(step);
+        step.receiveShadow = true;
+        stairGroup.add(step);
       }
     }
   }
-  if (!builderFloorId || selectedFloor?.type === "roof") addRoof(group, building);
+  if (
+    (!builderFloorId || selectedFloor?.type === "roof") &&
+    (!building.roof || !hiddenFloorIds.has(building.roof.floorId))
+  ) {
+    addRoof(group, building);
+  }
   return group;
 }
 
@@ -1322,7 +1339,7 @@ export function createProjectContent(
   for (const instance of project.scene.buildingInstances.filter((item) => item.visible)) {
     const building = project.buildingDefinitions.find((item) => item.id === instance.definitionId);
     if (!building) continue;
-    const group = createBuildingGroup(building);
+    const group = createBuildingGroup(building, undefined, new Set(instance.hiddenFloorIds ?? []));
     group.position.set(
       instance.transform.position.x * MM_TO_M,
       instance.transform.position.y * MM_TO_M,
