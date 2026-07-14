@@ -16,6 +16,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: windows-latest
@@ -56,6 +60,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Set unique rolling build version
+        shell: pwsh
+        run: |
+          $versionLine = node -p "require('./package.json').version.split('.').slice(0, 2).join('.')"
+          $version = "$versionLine.$env:GITHUB_RUN_NUMBER"
+          npm version $version --no-git-tag-version --allow-same-version
+          "SKETCHER_VERSION=$version" | Add-Content -Path $env:GITHUB_ENV
       - name: Clean and package Windows artifacts
         run: npm run package
       - name: Create SHA256 checksums
@@ -77,12 +88,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $title = "Sketcher latest Windows build"
-          $notes = "Automated Windows build from commit $env:GITHUB_SHA. This rolling release is replaced after each successful code change on main."
+          $title = "Sketcher v$env:SKETCHER_VERSION (latest Windows build)"
+          $notes = "Automated Sketcher v$env:SKETCHER_VERSION Windows build from commit $env:GITHUB_SHA. This rolling release is replaced after each successful code change on main."
           gh release view latest 2>$null
           $exists = $LASTEXITCODE -eq 0
           if ($exists) {
+            $previousAssets = gh release view latest --json assets --jq '.assets[].name'
+            $nextAssets = Get-ChildItem release -File | Select-Object -ExpandProperty Name
             gh release upload latest release/*.exe release/SHA256SUMS.txt --clobber
+            foreach ($asset in $previousAssets) {
+              if ($nextAssets -notcontains $asset) {
+                gh release delete-asset latest $asset --yes
+              }
+            }
             gh release edit latest --title $title --notes $notes --latest
           } else {
             gh release create latest release/*.exe release/SHA256SUMS.txt --verify-tag --title $title --notes $notes --latest

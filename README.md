@@ -8,6 +8,8 @@ Sketcher is a local-first Windows desktop application for millimetre-accurate ar
 
 Download the Windows installer or portable x64 build from the [latest GitHub release](https://github.com/arntsorli/sketcher/releases/latest). The first releases are unsigned, so Windows SmartScreen may ask for confirmation.
 
+Every successful code build on `main` publishes a uniquely versioned `Sketcher-<major>.<minor>.<run>-...` installer and portable executable. Tagged releases use the exact pushed `v...` version in both the app and filenames.
+
 ## Current capabilities
 
 - Local `.sketcher` project archives with previews, embedded assets, atomic saves, crash recovery, and Recycle Bin deletion.
